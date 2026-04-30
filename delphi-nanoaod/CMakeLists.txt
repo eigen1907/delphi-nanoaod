@@ -27,7 +27,6 @@ target_compile_options(delphi-nanoaod PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-ftempla
 target_include_directories(delphi-nanoaod PRIVATE ${ROOT_INCLUDE_DIRS})
 target_include_directories(delphi-nanoaod PRIVATE ${CMAKE_BINARY_DIR}/delphi-nanoaod/include) # version header
 target_include_directories(delphi-nanoaod PRIVATE ${CMAKE_SOURCE_DIR}/delphi-nanoaod/include)
-target_include_directories(delphi-nanoaod PRIVATE ${FASTJETDIR}/include)
 
 target_link_libraries(delphi-nanoaod argparse yaml-cpp delphi-analysis)
 target_link_libraries(delphi-nanoaod ROOT::Core ROOT::RIO ROOT::ROOTNTuple ROOT::Tree ROOT::EG)
