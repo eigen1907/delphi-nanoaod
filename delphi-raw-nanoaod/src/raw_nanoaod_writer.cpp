@@ -1,7 +1,9 @@
 #include "raw_nanoaod_writer.hpp"
 
 #include <algorithm>
+#include <cctype>
 #include <cmath>
+#include <cstring>
 #include <iostream>
 #include <unordered_map>
 
@@ -15,6 +17,61 @@ namespace sk = skelana;
 // We call it from fillGenPart(); we do NOT otherwise run any SKELANA logic
 // from this PHDST-level writer.
 extern "C" void pshmc_();
+
+namespace
+{
+std::string trimBankName(std::string name)
+{
+    while (!name.empty() && name.back() == ' ')
+    {
+        name.pop_back();
+    }
+    return name;
+}
+
+std::string hollerith4(int word)
+{
+    char bytes[4];
+    std::memcpy(bytes, &word, sizeof(bytes));
+    std::string little(bytes, bytes + 4);
+    std::string big{bytes[3], bytes[2], bytes[1], bytes[0]};
+
+    auto printableScore = [](const std::string &s) {
+        int score = 0;
+        for (unsigned char c : s)
+        {
+            if (std::isupper(c) || std::isdigit(c) || c == ' ')
+            {
+                ++score;
+            }
+        }
+        return score;
+    };
+
+    return printableScore(little) >= printableScore(big) ? little : big;
+}
+
+std::string bankName(int l)
+{
+    return l > 0 ? hollerith4(ph::IQ(l - 4)) : "";
+}
+
+int bankNLinks(int l)
+{
+    return l > 0 ? ph::IQ(l - 2) : 0;
+}
+
+int bankNData(int l)
+{
+    return l > 0 ? ph::IQ(l - 1) : 0;
+}
+
+bool isRawLikeBank(const std::string &name)
+{
+    const std::string trimmed = trimBankName(name);
+    return trimmed == "RAW" || (!trimmed.empty() && trimmed[0] == 'R');
+}
+} // namespace
 
 // -----------------------------------------------------------------------------
 // Field-registration helpers, copied from delphi-nanoaod/src/nanoaod_writer.cpp.
@@ -50,6 +107,17 @@ void RawNanoAODWriter::setOutput(const std::filesystem::path &output)
     output_ = output;
 }
 
+void RawNanoAODWriter::configureRawBankScan(bool enabled, int maxDepth,
+                                            int maxLinks, int maxWordsPerBank,
+                                            bool allBanks)
+{
+    rawBankScanEnabled_ = enabled;
+    rawBankMaxDepth_ = std::max(0, maxDepth);
+    rawBankMaxLinks_ = std::max(0, maxLinks);
+    rawBankMaxWordsPerBank_ = maxWordsPerBank;
+    rawBankAllBanks_ = allBanks;
+}
+
 // -----------------------------------------------------------------------------
 // PHDST callbacks.
 // -----------------------------------------------------------------------------
@@ -59,6 +127,7 @@ void RawNanoAODWriter::user00()
 
     std::unique_ptr<RNTupleModel> model = RNTupleModel::Create();
     defineEvent(model);
+    defineRawBank(model);
     defineEmShower(model);
     defineHadShower(model);
     defineStic(model);
@@ -73,7 +142,7 @@ void RawNanoAODWriter::user00()
 
     writer_ = RNTupleWriter::Recreate(std::move(model), "Events", output_.string());
     std::cout << "RawNanoAODWriter: opened " << output_
-              << " (Event, EmShower/Layer, HadShower/Hit, Stic, Muid/ElidRaw, "
+              << " (Event, RawBank/RawWord, EmShower/Layer, HadShower/Hit, Stic, Muid/ElidRaw, "
               << "TracRaw + TrackElement + Vd{Assoc,Unassoc}Hit + MtpcRaw, "
               << "GenPart)"
               << std::endl;
@@ -88,6 +157,7 @@ void RawNanoAODWriter::user02()
 {
     super::user02();
     fillEvent();
+    fillRawBanks();
     fillEmShowers();
     fillHadShowers();
     fillStic();
@@ -106,7 +176,8 @@ void RawNanoAODWriter::user02()
     }
     writer_->Fill();
     static long filled = 0;
-    if (++filled <= 5 || filled % 500 == 0)
+    ++filled;
+    if (filled <= 5 || filled % 500 == 0 || *nRawBank_ > 0)
     {
         std::cout << "RawNanoAODWriter: filled event " << filled
                   << "  run="    << ph::IIIRUN
@@ -117,6 +188,8 @@ void RawNanoAODWriter::user02()
                   << "  nMuid="  << *nMuidRaw_
                   << "  nElid="  << *nElidRaw_
                   << "  nTrac="  << *nTracRaw_
+                  << "  nRawBank=" << *nRawBank_
+                  << "  nRawWord=" << *nRawWord_
                   << "  isMC="   << static_cast<int>(*Event_isMC_)
                   << "  nGen="   << *nGenPart_
                   << std::endl;
@@ -147,6 +220,7 @@ void RawNanoAODWriter::defineEvent(std::unique_ptr<RNTupleModel> &model)
     MakeField(model, "Event_fillNumber",         "IIFILL: LEP fill number",         Event_fillNumber_);
     MakeField(model, "Event_bFieldTesla",        "BPILOT output: solenoid B (Tesla)", Event_bFieldTesla_);
     MakeField(model, "Event_bFieldGevCm",        "BPILOT output: 1/R [1/cm] = BGEVCM / pT [GeV]", Event_bFieldGevCm_);
+    MakeField(model, "Event_recordType",         "PHRTY record type, e.g. BOF/CPT/RAW/TAN/DST", Event_recordType_);
     MakeField(model, "Event_isMC",               "1 if the simulation structure (PSCLUJ) is populated for this event, 0 for real data", Event_isMC_);
 }
 
@@ -162,6 +236,164 @@ void RawNanoAODWriter::fillEvent()
     auto bfield = ph::BPILOT();
     *Event_bFieldTesla_ = bfield.first;
     *Event_bFieldGevCm_ = bfield.second;
+    *Event_recordType_ = ph::PHRTY();
+}
+
+// -----------------------------------------------------------------------------
+// RawBank / RawWord -- generic ZEBRA bank manifest for DETRAW raw-DST.
+//
+// delphi-raw-bank-lister is the human-readable probe. This writer stores the
+// same RAW/Rxxx tree in the RNTuple so downstream ML code can first learn which
+// detector raw banks are present and, when desired, consume a bounded payload
+// word sample without a detector-specific unpacker.
+// -----------------------------------------------------------------------------
+void RawNanoAODWriter::defineRawBank(std::unique_ptr<RNTupleModel> &model)
+{
+    MakeField(model, "nRawBank", "Number of scanned RAW/Rxxx ZEBRA banks", nRawBank_);
+    MakeField(model, "RawBank_name", "Trimmed 4-character ZEBRA bank name", RawBank_name_);
+    MakeField(model, "RawBank_nameCode", "Raw Hollerith bank-name word IQ(L-4)", RawBank_nameCode_);
+    MakeField(model, "RawBank_top",
+        "Top store code: 0=LRTOP, 1=LDTOP, 2=LTTOP, 3=LITOP, 4=LRTINT", RawBank_top_);
+    MakeField(model, "RawBank_addr", "ZEBRA link address in the current event store", RawBank_addr_);
+    MakeField(model, "RawBank_parentIdx",
+        "Index of the closest emitted parent bank, or -1 for a top-level/raw-only orphan", RawBank_parentIdx_);
+    MakeField(model, "RawBank_linkIndex", "Link number under the parent bank/top chain", RawBank_linkIndex_);
+    MakeField(model, "RawBank_depth", "Depth below the scanned top bank", RawBank_depth_);
+    MakeField(model, "RawBank_nlinks", "Bank link count IQ(L-2)", RawBank_nlinks_);
+    MakeField(model, "RawBank_ndata", "Bank data-word count IQ(L-1)", RawBank_ndata_);
+    MakeField(model, "RawBank_firstRawWordIdx", "First RawWord_* row for this bank", RawBank_firstRawWordIdx_);
+    MakeField(model, "RawBank_nRawWords",
+        "Number of RawWord_* rows saved for this bank after the per-bank limit", RawBank_nRawWords_);
+
+    MakeField(model, "nRawWord", "Total saved raw bank payload words", nRawWord_);
+    MakeField(model, "RawWord_rawBankIdx", "Index into RawBank_*", RawWord_rawBankIdx_);
+    MakeField(model, "RawWord_offset", "1-based word offset inside the source ZEBRA bank", RawWord_offset_);
+    MakeField(model, "RawWord_i", "Integer view IQ(L+offset) of the payload word", RawWord_i_);
+    MakeField(model, "RawWord_f", "Float view Q(L+offset) of the payload word", RawWord_f_);
+}
+
+void RawNanoAODWriter::fillRawBanks()
+{
+    RawBank_name_->clear();
+    RawBank_nameCode_->clear();
+    RawBank_top_->clear();
+    RawBank_addr_->clear();
+    RawBank_parentIdx_->clear();
+    RawBank_linkIndex_->clear();
+    RawBank_depth_->clear();
+    RawBank_nlinks_->clear();
+    RawBank_ndata_->clear();
+    RawBank_firstRawWordIdx_->clear();
+    RawBank_nRawWords_->clear();
+
+    RawWord_rawBankIdx_->clear();
+    RawWord_offset_->clear();
+    RawWord_i_->clear();
+    RawWord_f_->clear();
+
+    if (!rawBankScanEnabled_)
+    {
+        *nRawBank_ = 0;
+        *nRawWord_ = 0;
+        return;
+    }
+
+    std::unordered_set<int> seen;
+    scanRawBankTop(0, ph::LRTOP, seen);
+    scanRawBankTop(1, ph::LDTOP, seen);
+    scanRawBankTop(2, ph::LTTOP, seen);
+    scanRawBankTop(3, ph::LITOP, seen);
+    scanRawBankTop(4, ph::LRTINT, seen);
+
+    *nRawBank_ = static_cast<std::int32_t>(RawBank_name_->size());
+    *nRawWord_ = static_cast<std::int32_t>(RawWord_rawBankIdx_->size());
+}
+
+void RawNanoAODWriter::scanRawBankTop(int topCode, int topLink,
+                                      std::unordered_set<int> &seen)
+{
+    if (topLink <= 0)
+    {
+        return;
+    }
+    scanRawBankChain(topLink, topCode, -1, 0, 0, seen);
+}
+
+void RawNanoAODWriter::scanRawBankChain(int l, int topCode,
+                                        std::int32_t parentIdx,
+                                        std::int16_t linkIndex,
+                                        int depth,
+                                        std::unordered_set<int> &seen)
+{
+    for (int current = l; current > 0; current = ph::LQ(current))
+    {
+        if (seen.count(current) != 0)
+        {
+            return;
+        }
+        seen.insert(current);
+
+        const std::string name = bankName(current);
+        const bool emit = rawBankAllBanks_ || isRawLikeBank(name);
+        std::int32_t childParentIdx = parentIdx;
+        if (emit)
+        {
+            childParentIdx = appendRawBank(current, topCode, parentIdx,
+                                           linkIndex, depth);
+        }
+
+        if (depth >= rawBankMaxDepth_)
+        {
+            continue;
+        }
+
+        const int nlinks = std::clamp(bankNLinks(current), 0, rawBankMaxLinks_);
+        for (int i = 1; i <= nlinks; ++i)
+        {
+            const int child = ph::LQ(current - i);
+            if (child <= 0)
+            {
+                continue;
+            }
+            scanRawBankChain(child, topCode, childParentIdx,
+                             static_cast<std::int16_t>(i), depth + 1, seen);
+        }
+    }
+}
+
+std::int32_t RawNanoAODWriter::appendRawBank(int l, int topCode,
+                                             std::int32_t parentIdx,
+                                             std::int16_t linkIndex,
+                                             int depth)
+{
+    const auto bankIdx = static_cast<std::int32_t>(RawBank_name_->size());
+    const int ndata = std::max(0, bankNData(l));
+    const int firstWord = static_cast<int>(RawWord_rawBankIdx_->size());
+    const int wordLimit = rawBankMaxWordsPerBank_ < 0
+        ? ndata
+        : std::min(ndata, rawBankMaxWordsPerBank_);
+
+    RawBank_name_->push_back(trimBankName(bankName(l)));
+    RawBank_nameCode_->push_back(ph::IQ(l - 4));
+    RawBank_top_->push_back(topCode);
+    RawBank_addr_->push_back(l);
+    RawBank_parentIdx_->push_back(parentIdx);
+    RawBank_linkIndex_->push_back(linkIndex);
+    RawBank_depth_->push_back(static_cast<std::int16_t>(depth));
+    RawBank_nlinks_->push_back(static_cast<std::int16_t>(bankNLinks(l)));
+    RawBank_ndata_->push_back(ndata);
+    RawBank_firstRawWordIdx_->push_back(firstWord);
+    RawBank_nRawWords_->push_back(wordLimit);
+
+    for (int offset = 1; offset <= wordLimit; ++offset)
+    {
+        RawWord_rawBankIdx_->push_back(bankIdx);
+        RawWord_offset_->push_back(offset);
+        RawWord_i_->push_back(ph::IQ(l + offset));
+        RawWord_f_->push_back(ph::Q(l + offset));
+    }
+
+    return bankIdx;
 }
 
 // -----------------------------------------------------------------------------

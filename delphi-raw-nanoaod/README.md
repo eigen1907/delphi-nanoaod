@@ -1,7 +1,8 @@
 # delphi-raw-nanoaod
 
-A PHDST-level reader that converts a DELPHI shortDST (`.sdst`) **or** full-DST
-(`.fadana`) into a flat ROOT RNTuple. It is a **sibling** of the SKELANA-based
+A PHDST-level reader that converts a DELPHI shortDST (`.sdst`), full-DST
+(`.fadana`), long-DST (`.al`), or DETRAW raw-DST into a flat ROOT RNTuple.
+It is a **sibling** of the SKELANA-based
 `delphi-nanoaod` tool in the same repository: they share the `delphi-analysis`
 static library, but `delphi-raw-nanoaod` subclasses `phdst::Analysis` instead
 of `skelana::Analysis` — so none of SKELANA's aggregation runs, and we walk the
@@ -18,7 +19,8 @@ the B-field, primary vertex covariance, beamspot dimensions, and the raw MTPC
 dE/dx fields that a particle-flow reconstructor needs as inputs.
 
 This README describes what's in the RNTuple, how to build, and how to run.
-Design notes and the milestone plan live in `docs/PHDST_RAW_NANOAOD_PLAN.md`.
+Design notes live in `docs/PHDST_RAW_NANOAOD_PLAN.md`; the raw-DST workflow is
+documented in `docs/RAWDST_WORKFLOW.md`.
 
 ## Quickstart
 
@@ -56,7 +58,25 @@ All fields live on a single RNTuple named `Events`. Collections are flat
 |---|---|---|
 | `Event_experimentNumber`, `Event_runNumber`, `Event_fileSequenceNumber`, `Event_eventNumber`, `Event_date`, `Event_time`, `Event_fillNumber` | `/PHCIII/` | event header |
 | `Event_bFieldTesla`, `Event_bFieldGevCm` | `BPILOT` | solenoid B (≈ 1.231 T) and the derived GeV/cm factor. `1/R [1/cm] = Event_bFieldGevCm / pT [GeV]` |
+| `Event_recordType` | `PHRTY()` | PHDST record type, e.g. `RAW`, `TAN`, `DST`; needed for raw-DST files because raw banks and reconstructed objects are separate records |
 | `Event_beamSpot{X,Y,Z}`, `Event_beamSpotSigma{X,Y,Z}`, `Event_beamSpotErrorFlag` | `LQ(LDTOP-25)` | beamspot centre (cm) and Gaussian widths (cm). errorFlag = 0 if the bank is present, -1 if missing |
+
+### Generic raw-DST banks (`RawBank_*`, `RawWord_*`)
+
+For DETRAW raw-DST, `delphi-raw-nanoaod` now stores the same RAW/Rxxx ZEBRA
+bank tree printed by `delphi-raw-bank-lister`. `RawBank_*` gives the bank name,
+top-store code, parent/link, depth, `nlinks`, `ndata`, and payload range.
+`RawWord_*` stores a bounded payload copy as integer and float views.
+
+Controls:
+
+```sh
+--no-raw-bank-scan
+--raw-bank-all
+--raw-bank-max-depth 12
+--raw-bank-max-links 128
+--raw-bank-max-words 64   # -1 = all words, 0 = metadata only
+```
 
 ### Charged tracks (`TracRaw_*`)
 
@@ -223,6 +243,7 @@ Delphi-Sim-Pipeline's `container/run_singularity.sh` bind-mounts host
 | `scripts/inspect_tracking.C` | aggregate tracking statistics: χ²/ndf, VD hits per track, VD \|R\| histogram, TPC dE/dx, straight-line RPhi residual demo |
 | `scripts/make_plots.C` | 14 physics-validation PNGs covering all major collections |
 | `scripts/end_to_end_smoke.sh` | run a full Pythia8 → DELSIM → delphi-raw-nanoaod chain locally (cmssw/el9 singularity + `Delphi-Sim-Pipeline/container/run_singularity.sh`), on both `.sdst` and `.fadana`, and dump a per-collection entry count sanity report |
+| `scripts/raw_to_rawdst_nanoaod.sh` | run raw open-data → DETRAW raw-DST → bank listing → raw nanoAOD, or inspect an existing raw-DST |
 
 The two `.C` files are vanilla ROOT C++ macros — run with
 `root -l -q -b '<name>("input.root", ...)'`. The smoke test is a bash

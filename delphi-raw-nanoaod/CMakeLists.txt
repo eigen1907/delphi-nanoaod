@@ -8,6 +8,10 @@ add_executable(delphi-raw-nanoaod
     src/raw_nanoaod_writer.cpp
 )
 
+add_executable(delphi-raw-bank-lister
+    src/delphi-raw-bank-lister.cpp
+)
+
 target_compile_options(delphi-raw-nanoaod PRIVATE
     $<$<COMPILE_LANGUAGE:CXX>:-ftemplate-depth=50>)   # argparse
 
@@ -17,6 +21,7 @@ target_include_directories(delphi-raw-nanoaod PRIVATE
 
 target_link_libraries(delphi-raw-nanoaod argparse delphi-analysis)
 target_link_libraries(delphi-raw-nanoaod ROOT::Core ROOT::RIO ROOT::ROOTNTuple ROOT::Tree)
+target_link_libraries(delphi-raw-bank-lister argparse delphi-analysis)
 
 # Same DELPHI + CERNLIB link pattern as delphi-nanoaod, minus SKELANA itself.
 # We still bring skelana in because phdst_analysis shares a translation unit
@@ -27,3 +32,9 @@ target_link_dellibs(delphi-raw-nanoaod
 target_link_cernlibs(delphi-raw-nanoaod
     genlib packlib kernlib ariadne herwig jetset74)
 target_link_libraries(delphi-raw-nanoaod gfortran)
+
+target_link_dellibs(delphi-raw-bank-lister
+    skelana phdst dstana pxdst vfclap vdclap ufield bsaurus herlib trigger uhlib dstana)
+target_link_cernlibs(delphi-raw-bank-lister
+    genlib packlib kernlib ariadne herwig jetset74)
+target_link_libraries(delphi-raw-bank-lister gfortran)

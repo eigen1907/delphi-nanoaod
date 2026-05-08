@@ -7,14 +7,16 @@
 // PHCIII event-header fields; M1+ add PA.EMCA / PA.HCAL / PA.STIC / … hit
 // collections. See docs/PHDST_RAW_NANOAOD_PLAN.md.
 
+#include <array>
+#include <cstdint>
 #include <filesystem>
 #include <memory>
+#include <string>
+#include <unordered_set>
 #include <vector>
 
 #include "phdst_analysis.hpp"
 #include "phdst.hpp"
-
-#include <array>
 
 #include <ROOT/RNTuple.hxx>
 #include <ROOT/RNTupleModel.hxx>
@@ -45,6 +47,8 @@ public:
     virtual ~RawNanoAODWriter();
     static RawNanoAODWriter *getInstance();
     void setOutput(const std::filesystem::path &output);
+    void configureRawBankScan(bool enabled, int maxDepth, int maxLinks,
+                              int maxWordsPerBank, bool allBanks);
 
 protected:
     RawNanoAODWriter();
@@ -78,9 +82,22 @@ private:
     void fillVtx();         // LQ(LDTOP-1) walk -> Vtx_* collection
     void defineGenPart(std::unique_ptr<RNTupleModel> &model);
     void fillGenPart();     // calls SKELANA's PSHMC to fill PSCLUJ, then emits GenPart_*
+    void defineRawBank(std::unique_ptr<RNTupleModel> &model);
+    void fillRawBanks();    // generic RAW/Rxxx bank manifest + payload words
+    void scanRawBankTop(int topCode, int topLink, std::unordered_set<int> &seen);
+    void scanRawBankChain(int l, int topCode, std::int32_t parentIdx,
+                          std::int16_t linkIndex, int depth,
+                          std::unordered_set<int> &seen);
+    std::int32_t appendRawBank(int l, int topCode, std::int32_t parentIdx,
+                               std::int16_t linkIndex, int depth);
 
     std::filesystem::path              output_;
     std::unique_ptr<RNTupleWriter>     writer_;
+    bool rawBankScanEnabled_ = true;
+    bool rawBankAllBanks_ = false;
+    int rawBankMaxDepth_ = 8;
+    int rawBankMaxLinks_ = 64;
+    int rawBankMaxWordsPerBank_ = 64;
 
     // Event_* fields (M0): from PHCIII common block.
     std::shared_ptr<int>   Event_experimentNumber_;
@@ -92,6 +109,30 @@ private:
     std::shared_ptr<int>   Event_fillNumber_;
     std::shared_ptr<float> Event_bFieldTesla_;   // BTESLA from BPILOT
     std::shared_ptr<float> Event_bFieldGevCm_;   // BGEVCM from BPILOT — use as 1/R [1/cm] = BGEVCM / pT [GeV]
+    std::shared_ptr<std::string> Event_recordType_; // PHRTY(): BOF/CPT/RAW/TAN/DST/etc.
+
+    // Generic raw-DST bank scan. With DETRAW-enabled DELANA output, detector
+    // raw banks appear as RAW/Rxxx ZEBRA banks. RawBank_* records the compact
+    // tree printed by delphi-raw-bank-lister; RawWord_* stores a bounded copy
+    // of the bank data words as both integer and float views.
+    std::shared_ptr<std::int32_t>                         nRawBank_;
+    std::shared_ptr<std::vector<std::string>>             RawBank_name_;
+    std::shared_ptr<std::vector<std::int32_t>>            RawBank_nameCode_;
+    std::shared_ptr<std::vector<std::int32_t>>            RawBank_top_;
+    std::shared_ptr<std::vector<std::int32_t>>            RawBank_addr_;
+    std::shared_ptr<std::vector<std::int32_t>>            RawBank_parentIdx_;
+    std::shared_ptr<std::vector<std::int16_t>>            RawBank_linkIndex_;
+    std::shared_ptr<std::vector<std::int16_t>>            RawBank_depth_;
+    std::shared_ptr<std::vector<std::int16_t>>            RawBank_nlinks_;
+    std::shared_ptr<std::vector<std::int32_t>>            RawBank_ndata_;
+    std::shared_ptr<std::vector<std::int32_t>>            RawBank_firstRawWordIdx_;
+    std::shared_ptr<std::vector<std::int32_t>>            RawBank_nRawWords_;
+
+    std::shared_ptr<std::int32_t>                         nRawWord_;
+    std::shared_ptr<std::vector<std::int32_t>>            RawWord_rawBankIdx_;
+    std::shared_ptr<std::vector<std::int32_t>>            RawWord_offset_;
+    std::shared_ptr<std::vector<std::int32_t>>            RawWord_i_;
+    std::shared_ptr<std::vector<float>>                   RawWord_f_;
 
     // EM-shower collections (M2).
     //
