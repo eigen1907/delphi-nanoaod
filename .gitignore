@@ -4,6 +4,7 @@ fort.*
 *.root
 output
 eos
+plots
 .direnv
 xs*/
 *.log
