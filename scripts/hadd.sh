@@ -3,7 +3,7 @@ set -euo pipefail
 
 PROJECT_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 PYTHON=${PYTHON:-/eos/home-j/joshin/micromamba/envs/delphi-analysis/bin/python}
-FLORIAN_DIR=${1:-"${PROJECT_ROOT}/output/florian"}
+FLORIAN_DIR=${1:-"${PROJECT_ROOT}/output/100kTest"}
 HADD_SCRIPT="${PROJECT_ROOT}/python/hadd.py"
 
 count=0
