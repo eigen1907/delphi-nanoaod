@@ -55,7 +55,7 @@ from thrust_moments import (
 SYSTEMATICS = {
     'nominal': {
         'type': 'selection',
-        'charged_pt_min': 0.4,
+        'charged_p_min': 0.4,
         'neutral_e_min': 0.5,
     },
     
@@ -100,22 +100,22 @@ SYSTEMATICS = {
     # Selection systematics
     'neutral_e_up': {
         'type': 'selection',
-        'charged_pt_min': 0.4,
+        'charged_p_min': 0.4,
         'neutral_e_min': 5.0,
     },
     'neutral_e_down': {
         'type': 'selection',
-        'charged_pt_min': 0.4,
+        'charged_p_min': 0.4,
         'neutral_e_min': 0.3,
     },
     'charged_pt_up': {
         'type': 'selection',
-        'charged_pt_min': 0.5,
+        'charged_p_min': 0.5,
         'neutral_e_min': 0.5,
     },
     'charged_pt_down': {
         'type': 'selection',
-        'charged_pt_min': 0.3,
+        'charged_p_min': 0.3,
         'neutral_e_min': 0.5,
     },
 }
@@ -158,25 +158,30 @@ def create_counter_weighted_histogram():
     counter_weighted.GetXaxis().SetBinLabel(5, 'E-scheme Charged')
     return counter_weighted
 
-def create_gen_histograms():
+def create_gen_histograms(suffix=''):
     """
     Create gen-level histograms (before selection, no systematics).
     Only used for MC.
+
+    `suffix` is appended to the ROOT object names (NOT the dict keys) so a
+    second, parallel gen set can be booked without an in-memory name clash —
+    e.g. create_gen_histograms(suffix='_genPart') for a GenPart-based gen.
+    The dict keys stay fixed so process_gen_arrays fills either set unchanged.
     """
     hists = {}
-    
+
     # Standard binning (tbins2)
-    hists['Thrust_before2'] = ROOT.TH1D('Thrust_before2', '', len(tbins2)-1, array('d', tbins2))
-    hists['Thrust_before2_Escheme'] = ROOT.TH1D('Thrust_before2_Escheme', '', len(tbins2)-1, array('d', tbins2))
-    hists['ThrustC_before2'] = ROOT.TH1D('ThrustC_before2', '', len(tbins2)-1, array('d', tbins2))
-    hists['ThrustC_before2_Escheme'] = ROOT.TH1D('ThrustC_before2_Escheme', '', len(tbins2)-1, array('d', tbins2))
-    
+    hists['Thrust_before2'] = ROOT.TH1D('Thrust_before2'+suffix, '', len(tbins2)-1, array('d', tbins2))
+    hists['Thrust_before2_Escheme'] = ROOT.TH1D('Thrust_before2_Escheme'+suffix, '', len(tbins2)-1, array('d', tbins2))
+    hists['ThrustC_before2'] = ROOT.TH1D('ThrustC_before2'+suffix, '', len(tbins2)-1, array('d', tbins2))
+    hists['ThrustC_before2_Escheme'] = ROOT.TH1D('ThrustC_before2_Escheme'+suffix, '', len(tbins2)-1, array('d', tbins2))
+
     # Log binning (logtbins2)
-    hists['Thrust_before_log2'] = ROOT.TH1D('Thrust_before_log2', '', len(logtbins2)-1, array('d', logtbins2))
-    hists['Thrust_before_log2_Escheme'] = ROOT.TH1D('Thrust_before_log2_Escheme', '', len(logtbins2)-1, array('d', logtbins2))
-    hists['ThrustC_before_log2'] = ROOT.TH1D('ThrustC_before_log2', '', len(logtbins2)-1, array('d', logtbins2))
-    hists['ThrustC_before_log2_Escheme'] = ROOT.TH1D('ThrustC_before_log2_Escheme', '', len(logtbins2)-1, array('d', logtbins2))
-    
+    hists['Thrust_before_log2'] = ROOT.TH1D('Thrust_before_log2'+suffix, '', len(logtbins2)-1, array('d', logtbins2))
+    hists['Thrust_before_log2_Escheme'] = ROOT.TH1D('Thrust_before_log2_Escheme'+suffix, '', len(logtbins2)-1, array('d', logtbins2))
+    hists['ThrustC_before_log2'] = ROOT.TH1D('ThrustC_before_log2'+suffix, '', len(logtbins2)-1, array('d', logtbins2))
+    hists['ThrustC_before_log2_Escheme'] = ROOT.TH1D('ThrustC_before_log2_Escheme'+suffix, '', len(logtbins2)-1, array('d', logtbins2))
+
     return hists
 
 
@@ -460,7 +465,7 @@ def calculate_all_thrust_variants(px, py, pz, m, q, sel_c, sel_n, include_met=Tr
 # ============================================================================
 
 def process_gen_level(tree_gen_before, tree_gen, event_idx, gen_hists,
-                      charged_pt_min=0.4, neutral_e_min=0.5,
+                      charged_p_min=0.4, neutral_e_min=0.5,
                       moment_hists=None):
     """
     Process generator-level particles (MC only). No event selection at gen level.
@@ -477,7 +482,7 @@ def process_gen_level(tree_gen_before, tree_gen, event_idx, gen_hists,
     # Load from primary tree
     tree_gen_before.GetEntry(event_idx)
 
-    # Energy cut
+    # Reject off-peak energy-scan runs (keep ±1 GeV around the Z pole)
     E = tree_gen_before.Energy
     if abs(E - 91.25) > 1:
         return None
@@ -494,9 +499,11 @@ def process_gen_level(tree_gen_before, tree_gen, event_idx, gen_hists,
     if len(px) == 0:
         return None
 
-    # Check energy conservation; fall back to tgen if needed
+    # Only an EXCESS of energy means a V0 showered in the calorimeter; fall
+    # back to tgen (post-decay/pre-shower) so the V0 stays a single neutral.
+    # A deficit means ISR — keep tgenBefore in that case (do NOT use abs()).
     e = np.sqrt(px**2 + py**2 + pz**2 + m**2)
-    if abs(np.sum(e) - E) > 0.1:
+    if np.sum(e) - E > 0.1:
         tree_gen.GetEntry(event_idx)
         px = np.array(tree_gen.px)
         py = np.array(tree_gen.py)
@@ -505,8 +512,25 @@ def process_gen_level(tree_gen_before, tree_gen, event_idx, gen_hists,
         q  = np.array(tree_gen.charge)
         pt = np.array(tree_gen.pt)
         th = np.array(tree_gen.theta)
-        e = np.sqrt(px**2 + py**2 + pz**2 + m**2)
 
+    return process_gen_arrays(
+        px, py, pz, m, q, pt, th, E, gen_hists,
+        charged_p_min=charged_p_min, neutral_e_min=neutral_e_min,
+        moment_hists=moment_hists,
+    )
+
+
+def process_gen_arrays(px, py, pz, m, q, pt, th, E, gen_hists,
+                       charged_p_min=0.4, neutral_e_min=0.5,
+                       moment_hists=None):
+    """
+    Pure-array gen core extracted from process_gen_level (everything after the
+    particles are loaded). Reader-agnostic so the V0-aware nanoaod gen reuses
+    it. When gen_hists is given (the once-per-event "before" call) it fills the
+    gen 'before' histograms and the gen_full moment accumulators; then it
+    applies the per-syst gen track selection and returns the selected-gen
+    thrust values for response-matrix filling (or None).
+    """
     if len(px) == 0:
         return None
 
@@ -555,7 +579,7 @@ def process_gen_level(tree_gen_before, tree_gen, event_idx, gen_hists,
     gen_selection = apply_track_selection_delphi(
         px_gen=px, py_gen=py, pz_gen=pz, m_gen=m, q_gen=q,
         th_gen=th, pt_gen=pt,
-        charged_pt_min=charged_pt_min,
+        charged_p_min=charged_p_min,
         neutral_e_min=neutral_e_min,
     )
 
@@ -589,35 +613,46 @@ def process_reco_level(tree_reco, event_idx, systematics, reco_hists,
                        thrust_gen_dict=None, is_mc=False,
                        counter=None, counter_weighted=None,
                        moment_hists=None):
+    """Thin TTree wrapper: read the flat reco tree 't' for one event and
+    delegate to process_reco_level_arrays (the shared, reader-agnostic core).
+    Non-flat readers (EDM4hep, raw nanoaod) call the array core directly.
     """
-    Process reco-level particles for all systematics.
- 
+    tree_reco.GetEntry(event_idx)
+    process_reco_level_arrays(
+        np.array(tree_reco.px), np.array(tree_reco.py), np.array(tree_reco.pz),
+        np.array(tree_reco.mass), np.array(tree_reco.charge),
+        np.array(tree_reco.pt), np.array(tree_reco.theta),
+        np.array(tree_reco.d0), np.array(tree_reco.z0),
+        tree_reco.Energy,
+        systematics, reco_hists, response_matrices,
+        thrust_gen_dict=thrust_gen_dict, is_mc=is_mc,
+        counter=counter, counter_weighted=counter_weighted,
+        moment_hists=moment_hists,
+    )
+
+
+def process_reco_level_arrays(px, py, pz, m, q, pt, th, d0, z0, E,
+                              systematics, reco_hists, response_matrices,
+                              thrust_gen_dict=None, is_mc=False,
+                              counter=None, counter_weighted=None,
+                              moment_hists=None):
+    """
+    Process reco-level particles for all systematics from pre-built per-event
+    arrays. Identical physics to the former process_reco_level body; factored
+    out so non-flat readers (EDM4hep, raw nanoaod) reuse the exact same
+    systematics / event-selection / response / moments path.
+
     A SINGLE event selection is applied (P-scheme all-particle), and ALL
     four thrust variants (P/E scheme, all/charged) plus all four response
     matrices are gated on it. No per-variant recomputation.
     """
-    # Load event
-    tree_reco.GetEntry(event_idx)
- 
-    # Energy cut
-    E = tree_reco.Energy
+    # Reject off-peak energy-scan runs (keep ±1 GeV around the Z pole)
     if abs(E - 91.25) > 1:
         return
- 
-    # Load reco particles
-    px = np.array(tree_reco.px)
-    py = np.array(tree_reco.py)
-    pz = np.array(tree_reco.pz)
-    m  = np.array(tree_reco.mass)
-    q  = np.array(tree_reco.charge)
-    pt = np.array(tree_reco.pt)
-    th = np.array(tree_reco.theta)
-    d0 = np.array(tree_reco.d0)
-    z0 = np.array(tree_reco.z0)
- 
+
     if len(px) == 0:
         return
- 
+
     # Loop over all systematics
     for syst_name, syst_config in systematics.items():
         thrust_gen = thrust_gen_dict.get(syst_name) if thrust_gen_dict else None
@@ -646,7 +681,8 @@ def process_reco_level(tree_reco, event_idx, systematics, reco_hists,
             px=px_var, py=py_var, pz=pz_var, m=m_var, q=q_var,
             th=th_var, pt=pt_var,
             d0=d0_var, z0=z0_var,
-            charged_pt_min=syst_config.get('charged_pt_min', 0.4),
+            charged_p_min=syst_config.get('charged_p_min', 0.4),
+            charged_z0sin_max=10.0,
             neutral_e_min=syst_config.get('neutral_e_min', 0.5),
         )
  
@@ -890,7 +926,7 @@ def main():
             # Call once with gen_hists to fill "before" histograms
             process_gen_level(
                 tree_gen_before, tree_gen, iEvt, gen_hists,
-                charged_pt_min=0.4,  # Doesn't matter, gen_hists filling doesn't use these
+                charged_p_min=0.4,  # Doesn't matter, gen_hists filling doesn't use these
                 neutral_e_min=0.5,
                 moment_hists=moment_hists,
             )
@@ -901,7 +937,7 @@ def main():
             for syst_name, syst_config in systematics_to_run.items():
                 thrust_gen_dict[syst_name] = process_gen_level(
                     tree_gen_before, tree_gen, iEvt, None,  # gen_hists=None, don't fill again
-                    charged_pt_min=syst_config.get('charged_pt_min', 0.4),
+                    charged_p_min=syst_config.get('charged_p_min', 0.4),
                     neutral_e_min=syst_config.get('neutral_e_min', 0.5),
                 )
         

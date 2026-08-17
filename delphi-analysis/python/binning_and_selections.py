@@ -25,7 +25,8 @@ energy_bins = np.array([
 
 eijbins = [0.0, 0.0001, 0.00012589254117941674, 0.00015848931924611142, 0.00019952623149688788, 0.00025118864315095795, 0.00031622776601683794, 0.00039810717055349735, 0.0005011872336272725, 0.000630957344480193, 0.0007943282347242813, 0.001, 0.0012589254117941675, 0.001584893192461114, 0.001995262314968879, 0.002511886431509582, 0.0031622776601683794, 0.003981071705534973, 0.005011872336272725, 0.00630957344480193, 0.00794328234724282, 0.01, 0.012589254117941675, 0.01584893192461114, 0.01995262314968881, 0.025118864315095822, 0.03162277660168379, 0.039810717055349734, 0.05011872336272725, 0.06309573444801936, 0.07943282347242822, 0.1, 1]
 
-#eijbins = [0.0, 0.0001, 0.0002, 0.0005, 0.00075, 0.001, 0.00125, 0.0015, 0.00175, 0.002, 0.00225, 0.0025, 0.00275, 0.003, 0.0035, 0.004, 0.005, 0.007, 0.01, 0.02, 0.03, 0.04, 0.05, 0.07, 0.10, 0.15, 0.20, 0.3, 1]
+# Alternative eij binning (28 bins) for the 2D-binning systematic uncertainty.
+eijbins_alt = [0.0, 0.0001, 0.0002, 0.0005, 0.00075, 0.001, 0.00125, 0.0015, 0.00175, 0.002, 0.00225, 0.0025, 0.00275, 0.003, 0.0035, 0.004, 0.005, 0.007, 0.01, 0.02, 0.03, 0.04, 0.05, 0.07, 0.10, 0.15, 0.20, 0.3, 1]
 
 evalues = np.linspace(0, 40, 41)
 ebins = np.append(evalues, [42, 45, 200])
@@ -56,6 +57,7 @@ logtbins2 = [ -10., -8.,  -7., -6.5,
   -0.4, -0.3, -0.2, -0.1, 0.]
 
 eijbins = np.array(eijbins, dtype=np.float64)
+eijbins_alt = np.array(eijbins_alt, dtype=np.float64)
 rbins = np.array(rbins, dtype=np.float64)
 zbins = np.array(zbins, dtype=np.float64)
 tbins = np.array(tbins, dtype=np.float64)
@@ -174,9 +176,10 @@ def conversion_veto_mask_bypid(eta, phi, charge, pwflag,
     # final mask: True = keep (not conversion), False = drop
     return ~conv_any
 
-def apply_track_selection_delphi(px=None, py=None, pz=None, m=None, q=None, th=None, pt=None, eta=None, phi=None, d0=None, z0=None, pwflag=None, hp=None, 
+def apply_track_selection_delphi(px=None, py=None, pz=None, m=None, q=None, th=None, pt=None, eta=None, phi=None, d0=None, z0=None, pwflag=None, hp=None,
                                  px_gen=None, py_gen=None, pz_gen=None, m_gen=None, q_gen=None, th_gen=None, pt_gen=None, eta_gen=None, phi_gen=None, pwflag_gen=None, hp_gen=None,
                                  charged_pt_min=0.4,
+                                 charged_p_min=None,
                                  charged_d0_max=4.0,
                                  charged_z0sin_max=4.0,
                                  neutral_e_min=0.5,
@@ -194,6 +197,9 @@ def apply_track_selection_delphi(px=None, py=None, pz=None, m=None, q=None, th=N
         Generated particle properties
     charged_pt_min : float, optional
         Minimum pT for charged particles (GeV). Default: 0.4
+    charged_p_min : float, optional
+        Minimum |p| for charged particles (GeV). If set (not None), replaces
+        the pT cut with a total-momentum cut. Default: None.
     charged_d0_max : float, optional
         Maximum |d0| for charged particles (cm). Default: 4.0
     charged_z0sin_max : float, optional
@@ -244,9 +250,16 @@ def apply_track_selection_delphi(px=None, py=None, pz=None, m=None, q=None, th=N
         abs_z0sin = np.abs(z0 * sin_th)
 
         e = np.sqrt(px**2 + py**2 + pz**2 + m**2)
-        
+
+        # Charged momentum cut: |p| if charged_p_min is set, else pT
+        if charged_p_min is not None:
+            p_mag = np.sqrt(px**2 + py**2 + pz**2)
+            charged_mom_pass = (p_mag > charged_p_min)
+        else:
+            charged_mom_pass = (pt > charged_pt_min)
+
         # Charged particle selection (reconstructed)
-        core_charged = (abs_c > 0.1) & (pt > charged_pt_min) & (abs_d0 < charged_d0_max) & (abs_z0sin < charged_z0sin_max)
+        core_charged = (abs_c > 0.1) & charged_mom_pass & (abs_d0 < charged_d0_max) & (abs_z0sin < charged_z0sin_max)
         sel_c = core_charged & angle_accept
         
         # Neutral particle selection (reconstructed)
@@ -272,7 +285,12 @@ def apply_track_selection_delphi(px=None, py=None, pz=None, m=None, q=None, th=N
         
         # Charged particle selection (generated)
         # Note: No track quality cuts (d0, z0) at generator level
-        core_charged_gen = (abs_c_gen > 0.1) & (pt_gen > charged_pt_min)
+        if charged_p_min is not None:
+            p_mag_gen = np.sqrt(px_gen**2 + py_gen**2 + pz_gen**2)
+            charged_mom_pass_gen = (p_mag_gen > charged_p_min)
+        else:
+            charged_mom_pass_gen = (pt_gen > charged_pt_min)
+        core_charged_gen = (abs_c_gen > 0.1) & charged_mom_pass_gen
         sel_c_gen = core_charged_gen & angle_accept_gen
         
         # Neutral particle selection (generated)
