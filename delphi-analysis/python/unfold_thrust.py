@@ -44,14 +44,20 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='RooUnfold unfolding script with systematics')
     parser.add_argument('--iterations', type=int, default=6,
                         help='Number of iterations for Bayesian unfolding')
-    parser.add_argument('--version', type=str, default='v40',
-                        help='Version tag for input/output files (e.g., v36, v40)')
+    parser.add_argument('--version', type=str, default='v70',
+                        help='Version tag for output + the nominal (kk2f) response + data (e.g., v70)')
+    parser.add_argument('--syst-version', type=str, default=None,
+                        help='Version for the systematics generators (pythia8_default/'
+                             'pythia8_vincia/sherpa). Defaults to --version. kk2f (nominal) '
+                             'and data always use --version. Use e.g. --version v71 '
+                             '--syst-version v70 to swap only kk2f+data to v71.')
     parser.add_argument('--systematic', type=str, default='all',
                         help='Which systematic to unfold: all, nominal, or specific systematic name')
-    
+
     args = parser.parse_args()
-    
+
     VERSION = args.version
+    SYST_VERSION = args.syst_version or VERSION
 
     # List of systematics to process
     # These should match the SYSTEMATICS dictionary in analysis_thrust.py
@@ -142,53 +148,28 @@ if __name__ == '__main__':
         }
     ]
 
-    # Define MC generator configurations
-    # Files from analysis_thrust.py after hadding
+    # Define MC generator configurations.
+    # Unfold the SAME data with each generator's response matrix, to compare
+    # the four models (kk2f, pythia8_default, pythia8_vincia, sherpa) and assess
+    # the generator/model dependence of the unfolding. Files are the hadded v70
+    # thrust_nanoaod outputs.
+    GENERATORS = [
+        ('kk2f',            'thrust_kk2f4146_qqpy_91.25_{ds}_{ver}.root'),  # KK2f4146 qqpy (nominal)
+        ('pythia8_default', 'thrust_pythia8_default_isron_{ds}_{ver}.root'),
+        ('pythia8_vincia',  'thrust_pythia8_vincia_isron_{ds}_{ver}.root'),
+        ('sherpa',          'thrust_sherpa_isron_{ds}_{ver}.root'),
+    ]
+    # kk2f (the nominal response) + data use --version; the alternative-model
+    # systematics generators use --syst-version (defaults to --version).
     mc_configs = [
-        # 94c data configurations
         {
-            'name': 'qqpy_94c',
-            'mc_file': f'thrust_kk2f4146_qqpy_91.25_94c_{VERSION}.root',
-            'data_file': f'thrust_data_94c_{VERSION}.root',
-            'dataset': '94c'
-        },
-        {
-            'name': 'qqardcy_94c',
-            'mc_file': f'thrust_kk2f4146_qqardcy_91.25_94c_{VERSION}.root',
-            'data_file': f'thrust_data_94c_{VERSION}.root',
-            'dataset': '94c'
-        },
-        {
-            'name': 'pythia8_94c',
-            'mc_file': f'thrust_pythia8_94c_{VERSION}.root',
-            'data_file': f'thrust_data_94c_{VERSION}.root',
-            'dataset': '94c'
-        },
-        {
-            'name': 'pythia8_dire_94c',
-            'mc_file': f'thrust_pythia8_dire_94c_{VERSION}.root',
-            'data_file': f'thrust_data_94c_{VERSION}.root',
-            'dataset': '94c'
-        },
-        # 95d data configurations
-        {
-            'name': 'qqpy_95d',
-            'mc_file': f'thrust_kk2f4146_qqpy_91.25_95d_{VERSION}.root',
-            'data_file': f'thrust_data_95d_{VERSION}.root',
-            'dataset': '95d'
-        },
-        {
-            'name': 'pythia8_95d',
-            'mc_file': f'thrust_pythia8_95d_{VERSION}.root',
-            'data_file': f'thrust_data_95d_{VERSION}.root',
-            'dataset': '95d'
-        },
-        {
-            'name': 'pythia8_dire_95d',
-            'mc_file': f'thrust_pythia8_dire_95d_{VERSION}.root',
-            'data_file': f'thrust_data_95d_{VERSION}.root',
-            'dataset': '95d'
+            'name': f'{gen}_{ds}',
+            'mc_file': tmpl.format(ds=ds, ver=(VERSION if gen == 'kk2f' else SYST_VERSION)),
+            'data_file': f'thrust_data_{ds}_{VERSION}.root',
+            'dataset': ds,
         }
+        for ds in ('94c', '95d')
+        for gen, tmpl in GENERATORS
     ]
 
     # Output file
@@ -196,7 +177,8 @@ if __name__ == '__main__':
     fout = ROOT.TFile(filenameout, 'recreate')
     
     print(f"Configuration:")
-    print(f"  Version: {VERSION}")
+    print(f"  Version (output + kk2f + data): {VERSION}")
+    print(f"  Syst-generator version (pythia8/vincia/sherpa): {SYST_VERSION}")
     print(f"  Iterations: {args.iterations}")
     print(f"  Systematics: {', '.join(systematics_to_unfold)}")
     print(f"  Output file: {filenameout}")

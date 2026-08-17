@@ -5,6 +5,16 @@ import os
 import argparse
 from array import array
 
+# Explicitly load the locally-built RooUnfold before importing its classes.
+# ROOT's autoload (via rootmap) is fragile on lxplus, where nodes carry
+# inconsistent ROOT versions and stray RooUnfold rootmaps; a path-based load of
+# our own build (matched to the ROOT we source) is robust across nodes.
+_ru = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                   "RooUnfold", "build", "libRooUnfold")
+if ROOT.gSystem.Load(_ru) < 0:
+    raise RuntimeError("failed to load %s.so -- rebuild RooUnfold against the "
+                       "running ROOT (root-config --version)" % _ru)
+
 from ROOT import RooUnfoldResponse
 from ROOT import RooUnfold
 from ROOT import RooUnfoldBayes
@@ -1069,6 +1079,12 @@ if __name__ == '__main__':
                        help='Unfold r or z distribution')
     parser.add_argument('--overflow', action='store_true',
                        help='Include overflow bins in response matrix')
+    parser.add_argument('--mc', type=str, default=None,
+                       help='MC response file (overrides hardcoded filenamein)')
+    parser.add_argument('--data', type=str, default=None,
+                       help='Data file (overrides hardcoded datafile)')
+    parser.add_argument('--out', type=str, default=None,
+                       help='Output file (overrides hardcoded filenameout)')
     args = parser.parse_args()
 
     if args.method == "Bayes":
@@ -1087,6 +1103,11 @@ if __name__ == '__main__':
     #filenamein = 'response_ALEPHMC_LEP1MC1994_recons_aftercut.v3.root'
     #datafile = 'h_aleph_v3.root'
     #filenameout = f'unfolded_data_aleph_v3{surfix}.root'
+
+    # CLI overrides (preferred): --mc / --data / --out
+    if args.mc:   filenamein  = args.mc
+    if args.data: datafile    = args.data
+    if args.out:  filenameout = args.out
     
     data2dname = f'EEC2d_{args.jacobian}'
     

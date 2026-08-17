@@ -30,8 +30,25 @@ import os
 import sys
 import argparse
 import time
+import contextlib
 
 from ROOT import RooUnfoldResponse, RooUnfoldBayes
+
+
+@contextlib.contextmanager
+def _suppress_c_stdout():
+    """fd-level suppression of stdout (catches printf/cout from RooUnfold C++)."""
+    sys.stdout.flush()
+    devnull_fd = os.open(os.devnull, os.O_WRONLY)
+    saved_fd = os.dup(1)
+    os.dup2(devnull_fd, 1)
+    try:
+        yield
+    finally:
+        sys.stdout.flush()
+        os.dup2(saved_fd, 1)
+        os.close(saved_fd)
+        os.close(devnull_fd)
 
 
 def convert_to_roounfold_response(response_hist, name="response"):
@@ -137,44 +154,48 @@ def run_bootstrap_for_mode(data_hist, response_2d, n_toys, n_iterations, rng):
     
     # --- Nominal unfolding (for validation) ---
     norm_data = data_hist.Integral()
-    unfold_nom = RooUnfoldBayes(response, data_hist, n_iterations)
-    h_nom = unfold_nom.Hunfold()
+    with _suppress_c_stdout():
+        unfold_nom = RooUnfoldBayes(response, data_hist, n_iterations)
+        h_nom = unfold_nom.Hunfold()
     nominal = th1_to_array(h_nom) / bin_widths / norm_data
-    
+
     # --- Toy loop ---
     ensemble = np.zeros((n_toys, nbins))
-    
+
     t0 = time.time()
-    for k in range(n_toys):
-        if (k + 1) % 1000 == 0:
-            elapsed = time.time() - t0
-            rate = (k + 1) / elapsed
-            eta = (n_toys - k - 1) / rate
-            print(f"      Toy {k+1}/{n_toys}  ({rate:.0f} toys/s, ETA {eta:.0f}s)")
-        
-        # 1. Poisson fluctuate
-        h_toy = poisson_fluctuate_th1(data_hist, rng)
-        
-        # 2. Get norm from fluctuated histogram
-        norm_toy = h_toy.Integral()
-        if norm_toy <= 0:
-            # Pathological fluctuation — skip (extremely rare)
-            ensemble[k, :] = np.nan
-            continue
-        
-        # 3. Unfold
-        unfold_toy = RooUnfoldBayes(response, h_toy, n_iterations)
-        h_unf = unfold_toy.Hunfold()
-        
-        # 4. Divide by bin width and normalize
-        toy_result = th1_to_array(h_unf) / bin_widths / norm_toy
-        
-        # 5. Store
-        ensemble[k, :] = toy_result
-        
-        # Clean up
-        del h_toy, unfold_toy, h_unf
-    
+    with _suppress_c_stdout():
+        for k in range(n_toys):
+            if (k + 1) % 1000 == 0:
+                elapsed = time.time() - t0
+                rate = (k + 1) / elapsed
+                eta = (n_toys - k - 1) / rate
+                # Progress to stderr so it survives the stdout suppression
+                print(f"      Toy {k+1}/{n_toys}  ({rate:.0f} toys/s, ETA {eta:.0f}s)",
+                      file=sys.stderr, flush=True)
+
+            # 1. Poisson fluctuate
+            h_toy = poisson_fluctuate_th1(data_hist, rng)
+
+            # 2. Get norm from fluctuated histogram
+            norm_toy = h_toy.Integral()
+            if norm_toy <= 0:
+                # Pathological fluctuation — skip (extremely rare)
+                ensemble[k, :] = np.nan
+                continue
+
+            # 3. Unfold
+            unfold_toy = RooUnfoldBayes(response, h_toy, n_iterations)
+            h_unf = unfold_toy.Hunfold()
+
+            # 4. Divide by bin width and normalize
+            toy_result = th1_to_array(h_unf) / bin_widths / norm_toy
+
+            # 5. Store
+            ensemble[k, :] = toy_result
+
+            # Clean up
+            del h_toy, unfold_toy, h_unf
+
     elapsed = time.time() - t0
     print(f"      Completed {n_toys} toys in {elapsed:.1f}s ({n_toys/elapsed:.0f} toys/s)")
     
