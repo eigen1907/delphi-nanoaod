@@ -475,6 +475,39 @@ private:
     std::shared_ptr<float> BeamSpot_sigmaX_;
     std::shared_ptr<float> BeamSpot_sigmaY_;
     std::shared_ptr<float> BeamSpot_sigmaZ_;
+
+    // --- MC hadron tagging (FCC-style, only when mc_ && IFLSIM) ---
+    std::shared_ptr<std::vector<int8_t>> Part_fromBc_;
+    std::shared_ptr<std::vector<int8_t>> Part_fromBs_;
+    std::shared_ptr<std::vector<int8_t>> Part_fromBu_;
+    std::shared_ptr<std::vector<int8_t>> Part_fromBd_;
+    std::shared_ptr<std::vector<int8_t>> Part_fromLb_;
+    std::shared_ptr<int> n_Bc_Emin_;
+    std::shared_ptr<int> n_Bs_Emin_;
+    std::shared_ptr<int> n_Bu_Emin_;
+    std::shared_ptr<int> n_Bd_Emin_;
+    std::shared_ptr<int> n_Lb_Emin_;
+    std::shared_ptr<int> n_Bc_Emax_;
+    std::shared_ptr<int> n_Bs_Emax_;
+    std::shared_ptr<int> n_Bu_Emax_;
+    std::shared_ptr<int> n_Bd_Emax_;
+    std::shared_ptr<int> n_Lb_Emax_;
+    std::shared_ptr<int> label_Bc_Emin_;
+    std::shared_ptr<int> label_Bs_Emin_;
+    std::shared_ptr<int> label_Bu_Emin_;
+    std::shared_ptr<int> label_Bd_Emin_;
+    std::shared_ptr<int> label_Lb_Emin_;
+    std::shared_ptr<int> label_light_Emin_;
+    std::shared_ptr<int> label_hasBc_Emin_;
+    std::shared_ptr<int> label_has1Bc_Emin_;
+    std::shared_ptr<int> label_Bc_Emax_;
+    std::shared_ptr<int> label_Bs_Emax_;
+    std::shared_ptr<int> label_Bu_Emax_;
+    std::shared_ptr<int> label_Bd_Emax_;
+    std::shared_ptr<int> label_Lb_Emax_;
+    std::shared_ptr<int> label_light_Emax_;
+    std::shared_ptr<int> label_hasBc_Emax_;
+    std::shared_ptr<int> label_has1Bc_Emax_;
     
     // --- Method declarations ---
     void defineVdHit(std::unique_ptr<RNTupleModel> &model);
@@ -482,6 +515,8 @@ private:
     void defineVdUnHit(std::unique_ptr<RNTupleModel> &model);
     void fillVdUnHit();
 
+    void defineHadronTagging(std::unique_ptr<RNTupleModel> &model);
+    void fillHadronTagging(const eventData &eData);
 };
 
 #endif // NANOAOD_WRITER_HPP

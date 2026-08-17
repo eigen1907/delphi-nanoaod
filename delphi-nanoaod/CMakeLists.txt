@@ -9,7 +9,7 @@ set (FASTJETDIR "/cvmfs/sft.cern.ch/lcg/views/LCG_107/x86_64-el9-gcc13-opt" CACH
 configure_file(src/skelana.cra.in skelana.cra)
 ypatchy(skelana.f ${CMAKE_CURRENT_BINARY_DIR}/skelana.cra)
 
-add_executable(delphi-nanoaod src/delphi-nanoaod.cpp src/nanoaod_writer.cpp ${CMAKE_CURRENT_BINARY_DIR}/skelana.f)
+add_executable(delphi-nanoaod src/delphi-nanoaod.cpp src/nanoaod_writer.cpp src/hadron_tagging.cpp ${CMAKE_CURRENT_BINARY_DIR}/skelana.f)
 
 execute_process(COMMAND ${FASTJETDIR}/bin/fastjet-config --cxxflags
     OUTPUT_VARIABLE FASTJET_CXXFLAGS

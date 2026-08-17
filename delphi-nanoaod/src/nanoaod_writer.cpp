@@ -1,4 +1,5 @@
 #include "nanoaod_writer.hpp"
+#include "hadron_tagging.hpp"
 #include "phdst.hpp"
 #include <Math/PositionVector3D.h>
 #include <Math/DisplacementVector3D.h>
@@ -96,6 +97,7 @@ void NanoAODWriter::user00()
         defineSimPart(model);
         defineGenPart(model);
         defineSimVtx(model);
+        defineHadronTagging(model);
     }
     if (sk::IFLTRA > 0)
     {
@@ -166,6 +168,41 @@ void NanoAODWriter::user00()
     out_t->Branch("chi2ndfVD", chi2ndfVD, "chi2ndfVD[nParticle]/F");
     out_t->Branch("dpp",       dpp,       "dpp[nParticle]/F");
 
+    if (mc_ && sk::IFLSIM > 0)
+    {
+        out_t->Branch("Part_fromBc", Part_fromBc_.get());
+        out_t->Branch("Part_fromBs", Part_fromBs_.get());
+        out_t->Branch("Part_fromBu", Part_fromBu_.get());
+        out_t->Branch("Part_fromBd", Part_fromBd_.get());
+        out_t->Branch("Part_fromLb", Part_fromLb_.get());
+        out_t->Branch("n_Bc_Emin", n_Bc_Emin_.get(), "n_Bc_Emin/I");
+        out_t->Branch("n_Bs_Emin", n_Bs_Emin_.get(), "n_Bs_Emin/I");
+        out_t->Branch("n_Bu_Emin", n_Bu_Emin_.get(), "n_Bu_Emin/I");
+        out_t->Branch("n_Bd_Emin", n_Bd_Emin_.get(), "n_Bd_Emin/I");
+        out_t->Branch("n_Lb_Emin", n_Lb_Emin_.get(), "n_Lb_Emin/I");
+        out_t->Branch("n_Bc_Emax", n_Bc_Emax_.get(), "n_Bc_Emax/I");
+        out_t->Branch("n_Bs_Emax", n_Bs_Emax_.get(), "n_Bs_Emax/I");
+        out_t->Branch("n_Bu_Emax", n_Bu_Emax_.get(), "n_Bu_Emax/I");
+        out_t->Branch("n_Bd_Emax", n_Bd_Emax_.get(), "n_Bd_Emax/I");
+        out_t->Branch("n_Lb_Emax", n_Lb_Emax_.get(), "n_Lb_Emax/I");
+        out_t->Branch("label_Bc_Emin", label_Bc_Emin_.get(), "label_Bc_Emin/I");
+        out_t->Branch("label_Bs_Emin", label_Bs_Emin_.get(), "label_Bs_Emin/I");
+        out_t->Branch("label_Bu_Emin", label_Bu_Emin_.get(), "label_Bu_Emin/I");
+        out_t->Branch("label_Bd_Emin", label_Bd_Emin_.get(), "label_Bd_Emin/I");
+        out_t->Branch("label_Lb_Emin", label_Lb_Emin_.get(), "label_Lb_Emin/I");
+        out_t->Branch("label_light_Emin", label_light_Emin_.get(), "label_light_Emin/I");
+        out_t->Branch("label_hasBc_Emin", label_hasBc_Emin_.get(), "label_hasBc_Emin/I");
+        out_t->Branch("label_has1Bc_Emin", label_has1Bc_Emin_.get(), "label_has1Bc_Emin/I");
+        out_t->Branch("label_Bc_Emax", label_Bc_Emax_.get(), "label_Bc_Emax/I");
+        out_t->Branch("label_Bs_Emax", label_Bs_Emax_.get(), "label_Bs_Emax/I");
+        out_t->Branch("label_Bu_Emax", label_Bu_Emax_.get(), "label_Bu_Emax/I");
+        out_t->Branch("label_Bd_Emax", label_Bd_Emax_.get(), "label_Bd_Emax/I");
+        out_t->Branch("label_Lb_Emax", label_Lb_Emax_.get(), "label_Lb_Emax/I");
+        out_t->Branch("label_light_Emax", label_light_Emax_.get(), "label_light_Emax/I");
+        out_t->Branch("label_hasBc_Emax", label_hasBc_Emax_.get(), "label_hasBc_Emax/I");
+        out_t->Branch("label_has1Bc_Emax", label_has1Bc_Emax_.get(), "label_has1Bc_Emax/I");
+    }
+
     pdgDatabase = TDatabasePDG::Instance();
 };
 
@@ -229,6 +266,10 @@ void NanoAODWriter::user02()
 
     fillPartLoop(out_pData, out_eData, DataKind::data);
     fillSelection(out_pData, out_eData);
+    if (mc_ && sk::IFLSIM > 0)
+    {
+        fillHadronTagging(out_eData);
+    }
 
     writer_->Fill();
     out_t->Fill();
@@ -946,7 +987,7 @@ void NanoAODWriter::fillGenPart()
                { return sk::ISHST(i) - 1; });
 
     fillVector(GenPart_mass_, 1, sk::NP, [](int i)
-    { return sk::PP(i, 5) - 1; });
+    { return sk::PP(i, 5); });
 
 }
 
@@ -1665,6 +1706,65 @@ void NanoAODWriter::fillSelection(particleData& pData,
     eData.sPrime = eSelection.getsPrime();
     eData.d2 = eSelection.getd2();
     eData.cW = eSelection.getcW();
+}
+
+void NanoAODWriter::defineHadronTagging(std::unique_ptr<RNTupleModel> &model)
+{
+    MakeField(model, "Part_fromBc", "Reco particle has Bc ancestor in gen (via sim match)", Part_fromBc_);
+    MakeField(model, "Part_fromBs", "Reco particle has Bs ancestor in gen", Part_fromBs_);
+    MakeField(model, "Part_fromBu", "Reco particle has Bu ancestor in gen", Part_fromBu_);
+    MakeField(model, "Part_fromBd", "Reco particle has Bd ancestor in gen", Part_fromBd_);
+    MakeField(model, "Part_fromLb", "Reco particle has Lb ancestor in gen", Part_fromLb_);
+    MakeField(model, "n_Bc_Emin", "Gen Bc count thrust-min hemisphere (w.r.t. ThrustWithMissP)", n_Bc_Emin_);
+    MakeField(model, "n_Bs_Emin", "Gen Bs count thrust-min hemisphere", n_Bs_Emin_);
+    MakeField(model, "n_Bu_Emin", "Gen Bu count thrust-min hemisphere", n_Bu_Emin_);
+    MakeField(model, "n_Bd_Emin", "Gen Bd count thrust-min hemisphere", n_Bd_Emin_);
+    MakeField(model, "n_Lb_Emin", "Gen Lb count thrust-min hemisphere", n_Lb_Emin_);
+    MakeField(model, "n_Bc_Emax", "Gen Bc count thrust-max hemisphere", n_Bc_Emax_);
+    MakeField(model, "n_Bs_Emax", "Gen Bs count thrust-max hemisphere", n_Bs_Emax_);
+    MakeField(model, "n_Bu_Emax", "Gen Bu count thrust-max hemisphere", n_Bu_Emax_);
+    MakeField(model, "n_Bd_Emax", "Gen Bd count thrust-max hemisphere", n_Bd_Emax_);
+    MakeField(model, "n_Lb_Emax", "Gen Lb count thrust-max hemisphere", n_Lb_Emax_);
+    MakeField(model, "label_Bc_Emin", "FCC-style exclusive Bc label Emin", label_Bc_Emin_);
+    MakeField(model, "label_Bs_Emin", "FCC-style exclusive Bs label Emin", label_Bs_Emin_);
+    MakeField(model, "label_Bu_Emin", "FCC-style exclusive Bu label Emin", label_Bu_Emin_);
+    MakeField(model, "label_Bd_Emin", "FCC-style exclusive Bd label Emin", label_Bd_Emin_);
+    MakeField(model, "label_Lb_Emin", "FCC-style exclusive Lb label Emin", label_Lb_Emin_);
+    MakeField(model, "label_light_Emin", "FCC-style light-B label Emin", label_light_Emin_);
+    MakeField(model, "label_hasBc_Emin", "Any Bc in Emin hemisphere", label_hasBc_Emin_);
+    MakeField(model, "label_has1Bc_Emin", "Exactly one Bc in Emin hemisphere", label_has1Bc_Emin_);
+    MakeField(model, "label_Bc_Emax", "FCC-style exclusive Bc label Emax", label_Bc_Emax_);
+    MakeField(model, "label_Bs_Emax", "FCC-style exclusive Bs label Emax", label_Bs_Emax_);
+    MakeField(model, "label_Bu_Emax", "FCC-style exclusive Bu label Emax", label_Bu_Emax_);
+    MakeField(model, "label_Bd_Emax", "FCC-style exclusive Bd label Emax", label_Bd_Emax_);
+    MakeField(model, "label_Lb_Emax", "FCC-style exclusive Lb label Emax", label_Lb_Emax_);
+    MakeField(model, "label_light_Emax", "FCC-style light-B label Emax", label_light_Emax_);
+    MakeField(model, "label_hasBc_Emax", "Any Bc in Emax hemisphere", label_hasBc_Emax_);
+    MakeField(model, "label_has1Bc_Emax", "Exactly one Bc in Emax hemisphere", label_has1Bc_Emax_);
+}
+
+void NanoAODWriter::fillHadronTagging(const eventData &eData)
+{
+    const int nPart = static_cast<int>(*nPart_);
+    const int nGen = static_cast<int>(*nGenPart_);
+    const int nSim = static_cast<int>(*nSimPart_);
+
+    delphi_hadron_tagging::fillEventHemisphereCounts(
+        nGen, *GenPart_pdgId_, *GenPart_fourMomentum_, eData.TThetaWithMissP, eData.TPhiWithMissP,
+        *n_Bc_Emin_, *n_Bs_Emin_, *n_Bu_Emin_, *n_Bd_Emin_, *n_Lb_Emin_,
+        *n_Bc_Emax_, *n_Bs_Emax_, *n_Bu_Emax_, *n_Bd_Emax_, *n_Lb_Emax_);
+
+    delphi_hadron_tagging::fillExclusiveLabels(
+        *n_Bc_Emin_, *n_Bs_Emin_, *n_Bu_Emin_, *n_Bd_Emin_, *n_Lb_Emin_,
+        *label_Bc_Emin_, *label_Bs_Emin_, *label_Bu_Emin_, *label_Bd_Emin_, *label_Lb_Emin_,
+        *label_light_Emin_, *label_hasBc_Emin_, *label_has1Bc_Emin_,
+        *n_Bc_Emax_, *n_Bs_Emax_, *n_Bu_Emax_, *n_Bd_Emax_, *n_Lb_Emax_,
+        *label_Bc_Emax_, *label_Bs_Emax_, *label_Bu_Emax_, *label_Bd_Emax_, *label_Lb_Emax_,
+        *label_light_Emax_, *label_hasBc_Emax_, *label_has1Bc_Emax_);
+
+    delphi_hadron_tagging::fillPartFlavourFlags(
+        nPart, nSim, nGen, *Part_simIdx_, *SimPart_genIdx_, *GenPart_parentIdx_, *GenPart_pdgId_,
+        *Part_fromBc_, *Part_fromBs_, *Part_fromBu_, *Part_fromBd_, *Part_fromLb_);
 }
 
 void NanoAODWriter::user99()
