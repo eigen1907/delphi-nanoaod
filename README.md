@@ -1,6 +1,24 @@
+> [!IMPORTANT]
+> **New DELPHI framework development happens at
+> [delphi-fullDST-edm4hep/delphi-edm4hep](https://github.com/delphi-fullDST-edm4hep/delphi-edm4hep).**
+>
+> DELPHI NanoAOD is complete and working — this is not a deprecation. From
+> **1 September 2026** all new capability lands in the EDM4hep converter: the
+> full-DST collections, EDM4hep interoperability with the wider key4hep
+> ecosystem, and ongoing development. That is where the latest and greatest
+> goes.
+>
+> The two formats have been cross-checked on 94c data built from the same input
+> DSTs: identical event sets, particle content agreeing to ~99.8%, and thrust
+> agreeing to better than 1e-3 in 99% of events. Existing NanoAOD analyses are
+> correct as they stand and do not need to migrate.
+>
+> This repository stays public and read-only so the body of published DELPHI
+> results produced with it remains reproducible and citable.
+
 # DELPHI NanoAOD
 
-TThe DELPHI NanoAOD is built on the DELPHI [SKELANA Analysis Framework](https://opendata-qa.cern.ch/record/80502), written in Fortran. SKELANA processes data from the DELPHI Full, Short, and XShort DST formats, storing extracted information in COMMON blocks for further analysis. Various DELPHI analysis programs are integrated, allowing users to control data processing and re-execute selected algorithms to study the impact of parameter adjustments and fine-tuning.
+The DELPHI NanoAOD is built on the DELPHI [SKELANA Analysis Framework](https://opendata-qa.cern.ch/record/80502), written in Fortran. SKELANA processes data from the DELPHI Full, Short, and XShort DST formats, storing extracted information in COMMON blocks for further analysis. Various DELPHI analysis programs are integrated, allowing users to control data processing and re-execute selected algorithms to study the impact of parameter adjustments and fine-tuning.
 
 DELPHI data is structured around a particle-based model, where each object is represented as a particle with associated blocklets containing detector-specific information. These blocklets include tracking data, calorimeter measurements, and particle identification details.
 
