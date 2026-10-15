@@ -179,10 +179,8 @@ private:
     std::shared_ptr<std::vector<XYZVectorF>>              ElidRaw_refitMomentum_;   // Decoded QELID(3..5)
 
     // --- HAID: PA.HAID hadron-ID + RICH measurements.
-    // Direct PHDST-level decode of the variable-length HAID bank, mirroring
-    // SKELANA's PSHHAD (skelana.car L3819+). One row per PA-track that has
-    // a HAID sub-bank. RICH gas/liquid sections may be present independently
-    // (a track sees only one radiator, depending on its momentum).
+    // SKELANA's PSHHAD decode, one row per VECP object. paIdx retains
+    // the original PA identity so these rows can be joined to TracRaw.
     //   HaidRaw_*  : tags from the IDATI ionization section of HAID, plus
     //                richQuality from the IDATQ section. Tag values are
     //                signed integers in the range [-1..6] per Table I of the
@@ -199,7 +197,7 @@ private:
     std::shared_ptr<std::vector<std::int8_t>>             HaidRaw_protonDedx_;      // KHAID(3) JBYT(IHAD1,4,3)-1
     std::shared_ptr<std::vector<float>>                   HaidRaw_kaonCombined_;    // QHAID(7) (MOD(IHAD2,100)-10)/10
     std::shared_ptr<std::vector<float>>                   HaidRaw_protonCombined_;  // QHAID(8) (IHAD2/100-10)/10
-    std::shared_ptr<std::vector<std::int8_t>>             HaidRaw_richQuality_;     // KHAID(9) NINT(Q(LHAID+IDAT+1)) at IDATQ section
+    std::shared_ptr<std::vector<std::int32_t>>            HaidRaw_richQuality_;     // KHAID(9): full RICH status word
 
     std::shared_ptr<std::vector<float>>                   HaidRaw_thetaGas_;        // QGRIC(1) Q(LHAID+IDAT+1) gas Cherenkov angle (rad)
     std::shared_ptr<std::vector<float>>                   HaidRaw_sigmaGas_;        // QGRIC(2) Q(LHAID+IDAT+2) gas sigma

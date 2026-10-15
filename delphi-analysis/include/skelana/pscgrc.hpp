@@ -22,12 +22,12 @@ namespace skelana
     extern "C" struct
     {
         int ngric;
-        int kgric[MTRACK][6];
+        int kgric[MTRACK][5];
         float theg[MTRACK];
         float sigg[MTRACK];
         int nphg[MTRACK];
-        float nepg[MTRACK];
-        int flagg[MTRACK];
+        int nepg[MTRACK];
+        float flagg[MTRACK];
     } pscgrc_;
 
     inline int &NGRIC = pscgrc_.ngric;
@@ -36,8 +36,8 @@ namespace skelana
     inline float &THEG(int i) { return pscgrc_.theg[i - 1]; }
     inline float &SIGG(int i) { return pscgrc_.sigg[i - 1]; }
     inline int &NPHG(int i) { return pscgrc_.nphg[i - 1]; }
-    inline float &NEPG(int i) { return pscgrc_.nepg[i - 1]; }
-    inline int &FLAGG(int i) { return pscgrc_.flagg[i - 1]; }
+    inline int &NEPG(int i) { return pscgrc_.nepg[i - 1]; }
+    inline float &FLAGG(int i) { return pscgrc_.flagg[i - 1]; }
 } // namespace skelana
 
 #endif // SKELETON_PSCGRC_HPP

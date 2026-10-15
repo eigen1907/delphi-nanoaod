@@ -610,30 +610,14 @@ void RawNanoAODWriter::fillMuidEl()
 }
 
 // -----------------------------------------------------------------------------
-// PA.HAID hadron-ID + RICH measurements (per-VECP-track).
-//
-// Reads SKELANA commons populated by PSBEG (called from user02 above):
-//   pschad_.khaid[i][...]   per-track HAID tags (KHAID(field, i))
-//   pscgrc_.theg/sigg/...   per-track RICH gas radiator
-//   psclrc_.thel/sigl/...   per-track RICH liquid radiator
-//
-// One row per VECP charged-track (i = LVPART .. NVECP). The OLD skelana-
-// based writer uses exactly this idiom (nanoaod_writer.cpp lines 1261+);
-// we mirror it here so PHDST and SKELANA writers produce identical
-// content from the same fadana.
-//
-// Earlier attempt: walk PA chain and call LPHPA('HAID', lpa, 0) directly
-// (mirroring PSHHAD bank-decode). LPHPA returned 0 even for tracks where
-// the bank was present and the OLD writer's PSHHAD found data. Empirical
-// conclusion: LPHPA on the PA-extra-module banks (HAID/MUID/ELID, IDs
-// 24-26) requires SKELANA's per-event setup (PSBEG); without it, the
-// extramodule registry isn't populated and bank lookups silently fail.
-// Reading from the SKELANA commons after PSBEG sidesteps this entirely.
+// PA.HAID measurements decoded by PSBEG. Rows follow VECP, including
+// neutral placeholders; paIdx links each row back to the original PA bank.
+// Use the decoded banks rather than rounded expected-count auxiliaries.
 // -----------------------------------------------------------------------------
 void RawNanoAODWriter::defineHaidRich(std::unique_ptr<RNTupleModel> &model)
 {
-    MakeField(model, "nHaidRaw",                  "Number of VECP charged tracks with hadron-ID rows (one per VECP-i in [LVPART..NVECP])", nHaidRaw_);
-    MakeField(model, "HaidRaw_paIdx",             "VECP track index (1-based) — same ordering as Part_* in the OLD nanoaod writer", HaidRaw_paIdx_);
+    MakeField(model, "nHaidRaw",                  "Number of hadron-ID rows, one per VECP object including neutral placeholders", nHaidRaw_);
+    MakeField(model, "HaidRaw_paIdx",             "Zero-based PA index; -1 when the VECP object has no PA bank", HaidRaw_paIdx_);
     MakeField(model, "HaidRaw_kaonDedx",          "KHAID(2): kaon signature with dE/dx (-1=no info)",        HaidRaw_kaonDedx_);
     MakeField(model, "HaidRaw_protonDedx",        "KHAID(3): proton signature with dE/dx",                   HaidRaw_protonDedx_);
     MakeField(model, "HaidRaw_kaonRich",          "KHAID(4): kaon signature with RICH",                      HaidRaw_kaonRich_);
@@ -669,12 +653,20 @@ void RawNanoAODWriter::fillHaidRich()
     HaidRaw_nphLiq_->clear();        HaidRaw_nepLiq_->clear();
     HaidRaw_flagLiq_->clear();
 
-    // PSBEG (called in user02) populates these commons. Iterate over VECP
-    // and emit one row per charged-track (VECP-i in [LVPART..NVECP]). Same
-    // pattern as nanoaod_writer.cpp:1261+ in the OLD skelana-based writer.
+    // VECP is charged-first; the raw PA chain has a different ordering.
+    std::unordered_map<int, int> paIndex;
+    int index = 0;
+    // The raw reader also writes the setup record, which has no PA tree.
+    if (ph::LDTOP > 0)
+        for (int lpv = ph::LQ(ph::LDTOP - 1); lpv > 0; lpv = ph::LQ(lpv))
+            for (int lpa = ph::LQ(lpv - 1); lpa > 0; lpa = ph::LQ(lpa))
+                paIndex[lpa] = index++;
+
+    // Keep the same rows as native Part, including neutral placeholders.
     for (int i = sk::LVPART; i <= sk::NVECP; ++i)
     {
-        HaidRaw_paIdx_->push_back(static_cast<std::int16_t>(i));
+        auto pa = paIndex.find(sk::LVECP(i));
+        HaidRaw_paIdx_->push_back(pa == paIndex.end() ? -1 : pa->second);
         HaidRaw_kaonDedx_->push_back(  static_cast<std::int8_t>(sk::KHAID(2, i)));
         HaidRaw_protonDedx_->push_back(static_cast<std::int8_t>(sk::KHAID(3, i)));
         HaidRaw_kaonRich_->push_back(  static_cast<std::int8_t>(sk::KHAID(4, i)));
@@ -682,18 +674,18 @@ void RawNanoAODWriter::fillHaidRich()
         HaidRaw_pionRich_->push_back(  static_cast<std::int8_t>(sk::KHAID(6, i)));
         HaidRaw_kaonCombined_->push_back(  sk::QHAID(7, i));
         HaidRaw_protonCombined_->push_back(sk::QHAID(8, i));
-        HaidRaw_richQuality_->push_back(static_cast<std::int8_t>(sk::KHAID(9, i)));
+        HaidRaw_richQuality_->push_back(sk::KHAID(9, i));
 
-        HaidRaw_thetaGas_->push_back(sk::THEG(i));
-        HaidRaw_sigmaGas_->push_back(sk::SIGG(i));
-        HaidRaw_nphGas_->push_back(  static_cast<std::int16_t>(sk::NPHG(i)));
-        HaidRaw_nepGas_->push_back(  sk::NEPG(i));
-        HaidRaw_flagGas_->push_back( static_cast<std::int8_t>(sk::FLAGG(i)));
-        HaidRaw_thetaLiq_->push_back(sk::THEL(i));
-        HaidRaw_sigmaLiq_->push_back(sk::SIGL(i));
-        HaidRaw_nphLiq_->push_back(  static_cast<std::int16_t>(sk::NPHL(i)));
-        HaidRaw_nepLiq_->push_back(  sk::NEPL(i));
-        HaidRaw_flagLiq_->push_back( static_cast<std::int8_t>(sk::FLAGL(i)));
+        HaidRaw_thetaGas_->push_back(sk::QGRIC(1, i));
+        HaidRaw_sigmaGas_->push_back(sk::QGRIC(2, i));
+        HaidRaw_nphGas_->push_back(sk::KGRIC(3, i));
+        HaidRaw_nepGas_->push_back(sk::QGRIC(4, i));
+        HaidRaw_flagGas_->push_back(sk::KGRIC(5, i));
+        HaidRaw_thetaLiq_->push_back(sk::QLRIC(1, i));
+        HaidRaw_sigmaLiq_->push_back(sk::QLRIC(2, i));
+        HaidRaw_nphLiq_->push_back(sk::KLRIC(3, i));
+        HaidRaw_nepLiq_->push_back(sk::QLRIC(4, i));
+        HaidRaw_flagLiq_->push_back(sk::KLRIC(5, i));
     }
     *nHaidRaw_ = static_cast<std::int16_t>(HaidRaw_paIdx_->size());
 }

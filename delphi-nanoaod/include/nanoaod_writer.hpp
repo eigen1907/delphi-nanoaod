@@ -167,6 +167,7 @@ private:
     std::shared_ptr<std::string> Event_DSTType_;
 
     std::shared_ptr<int16_t> nPart_;
+    std::shared_ptr<std::vector<int16_t>> Part_paIdx_;
     std::shared_ptr<std::vector<XYZTVectorF>> Part_fourMomentum_;
     std::shared_ptr<std::vector<int8_t>> Part_charge_;
     std::shared_ptr<std::vector<int16_t>> Part_pdgId_;

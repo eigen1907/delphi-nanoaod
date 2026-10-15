@@ -29,8 +29,8 @@ namespace skelana
         float thel[MTRACK];
         float sigl[MTRACK];
         int nphl[MTRACK];
-        float nepl[MTRACK];
-        int flagl[MTRACK];
+        int nepl[MTRACK];
+        float flagl[MTRACK];
     } psclrc_;
 
     inline int &NLRIC = psclrc_.nlric;
@@ -39,8 +39,8 @@ namespace skelana
     inline float &THEL(int i) { return psclrc_.thel[i - 1]; }
     inline float &SIGL(int i) { return psclrc_.sigl[i - 1]; }
     inline int &NPHL(int i) { return psclrc_.nphl[i - 1]; }
-    inline float &NEPL(int i) { return psclrc_.nepl[i - 1]; }
-    inline int &FLAGL(int i) { return psclrc_.flagl[i - 1]; }
+    inline int &NEPL(int i) { return psclrc_.nepl[i - 1]; }
+    inline float &FLAGL(int i) { return psclrc_.flagl[i - 1]; }
 } // namespace skelana
 
 #endif // SKELANA_PSCLRC_HPP

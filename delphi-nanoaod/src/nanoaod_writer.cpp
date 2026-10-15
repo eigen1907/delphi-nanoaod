@@ -7,6 +7,7 @@
 #include <Math/SMatrix.h>
 
 #include <TTree.h>
+#include <unordered_map>
 
 #include "TDatabasePDG.h"
 #include "TParticlePDG.h"
@@ -318,6 +319,7 @@ void NanoAODWriter::fillEvent()
 void NanoAODWriter::definePart(std::unique_ptr<RNTupleModel> &model)
 {
     MakeField(model, "nPart", "Number of particles", nPart_);
+    MakeField(model, "Part_paIdx", "Zero-based PA index; -1 when the VECP object has no PA bank", Part_paIdx_);
     MakeField(model, "Part_fourMomentum", "Particle 4-momentum", Part_fourMomentum_);
     MakeField(model, "Part_charge", "Particle charge", Part_charge_);
     MakeField(model, "Part_pdgId", "DELPHI mass code, not PDG ID (gamma=21, e-=2, e+=-2)", Part_pdgId_);
@@ -360,6 +362,16 @@ void NanoAODWriter::definePart(std::unique_ptr<RNTupleModel> &model)
 
 void NanoAODWriter::fillPart()
 {
+    std::unordered_map<int, int> paIndex;
+    int index = 0;
+    for (int lpv = phdst::LQ(phdst::LDTOP - 1); lpv > 0; lpv = phdst::LQ(lpv))
+        for (int lpa = phdst::LQ(lpv - 1); lpa > 0; lpa = phdst::LQ(lpa))
+            paIndex[lpa] = index++;
+
+    fillVector(Part_paIdx_, sk::LVPART, sk::NVECP, [&](int i) {
+        auto pa = paIndex.find(sk::LVECP(i));
+        return pa == paIndex.end() ? -1 : pa->second;
+    });
     *nPart_ = sk::NVECP;
     fillVector(Part_fourMomentum_, sk::LVPART, sk::NVECP, [](int i)
                { return XYZTVectorF(sk::VECP(1, i), sk::VECP(2, i), sk::VECP(3, i), sk::VECP(4, i)); });
@@ -1335,16 +1347,16 @@ void NanoAODWriter::fillHadid()
         Dedx_valueVD_->push_back(sk::QDEDX(6, i));
         Dedx_nrVDHits_->push_back(sk::KDEDX(7, i));
 
-        Rich_theg_->push_back(sk::THEG(i));
-        Rich_sigg_->push_back(sk::SIGG(i));
-        Rich_nphg_->push_back(sk::NPHG(i));
-        Rich_nepg_->push_back(sk::NEPG(i));
-        Rich_flagg_->push_back(sk::FLAGG(i));
-        Rich_thel_->push_back(sk::THEL(i));
-        Rich_sigl_->push_back(sk::SIGL(i));
-        Rich_nphl_->push_back(sk::NPHL(i));
-        Rich_nepl_->push_back(sk::NEPL(i));
-        Rich_flagl_->push_back(sk::FLAGL(i));
+        Rich_theg_->push_back(sk::QGRIC(1, i));
+        Rich_sigg_->push_back(sk::QGRIC(2, i));
+        Rich_nphg_->push_back(sk::KGRIC(3, i));
+        Rich_nepg_->push_back(sk::QGRIC(4, i));
+        Rich_flagg_->push_back(sk::KGRIC(5, i));
+        Rich_thel_->push_back(sk::QLRIC(1, i));
+        Rich_sigl_->push_back(sk::QLRIC(2, i));
+        Rich_nphl_->push_back(sk::KLRIC(3, i));
+        Rich_nepl_->push_back(sk::QLRIC(4, i));
+        Rich_flagl_->push_back(sk::KLRIC(5, i));
     }
 }
 
