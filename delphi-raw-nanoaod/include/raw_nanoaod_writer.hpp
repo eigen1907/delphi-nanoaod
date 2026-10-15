@@ -19,6 +19,7 @@
 #include <ROOT/RNTuple.hxx>
 #include <ROOT/RNTupleModel.hxx>
 #include <ROOT/RNTupleWriter.hxx>
+#include <RVersion.h>
 #include <Math/Vector3D.h>
 #include <Math/Vector4D.h>
 
@@ -29,8 +30,13 @@ using XYZVectorF = ROOT::Math::DisplacementVector3D<
 using XYZTVectorF = ROOT::Math::LorentzVector<
     ROOT::Math::PxPyPzE4D<float>>;
 
+#if ROOT_VERSION_CODE >= ROOT_VERSION(6, 36, 0)
+using RNTupleWriter = ROOT::RNTupleWriter;
+using RNTupleModel = ROOT::RNTupleModel;
+#else
 using RNTupleWriter = ROOT::Experimental::RNTupleWriter;
 using RNTupleModel = ROOT::Experimental::RNTupleModel;
+#endif
 
 namespace ph = phdst;
 
@@ -159,12 +165,7 @@ private:
     std::shared_ptr<std::vector<XYZVectorF>>              Stic_directionFromMain_;
     std::shared_ptr<std::vector<std::int16_t>>            Stic_numHitTowers_;
 
-    // --- Muon / Electron per-track raw ID (M5): PA.MUID + PA.ELID records.
-    // Keep it simple — one row per track that has that extra-module present,
-    // carrying the raw ID words. The Muid_* / Elid_* collections in the
-    // SKELANA-based delphi-nanoaod carry the parsed/refitted versions; these
-    // sit alongside them and expose the un-interpreted PSCMUD/PSCELD words
-    // for downstream ML / calibration work.
+    // Muon/electron ID: one row per PA with a MUID/ELID bank.
     std::shared_ptr<std::int16_t>                         nMuidRaw_;
     std::shared_ptr<std::vector<std::int16_t>>            MuidRaw_paIdx_;
     std::shared_ptr<std::vector<std::int32_t>>            MuidRaw_tag_;        // Q(LMUID+1) NINT = tag
@@ -173,9 +174,9 @@ private:
 
     std::shared_ptr<std::int16_t>                         nElidRaw_;
     std::shared_ptr<std::vector<std::int16_t>>            ElidRaw_paIdx_;
-    std::shared_ptr<std::vector<std::int32_t>>            ElidRaw_tag_;             // Q(LELID+1) NINT
-    std::shared_ptr<std::vector<std::int32_t>>            ElidRaw_gammaConvTag_;    // Q(LELID+2) NINT
-    std::shared_ptr<std::vector<XYZVectorF>>              ElidRaw_refitMomentum_;   // Q(LELID+3..5)
+    std::shared_ptr<std::vector<std::int32_t>>            ElidRaw_tag_;             // PA identification bits 7..9
+    std::shared_ptr<std::vector<std::int32_t>>            ElidRaw_gammaConvTag_;    // PA identification bits 10..12
+    std::shared_ptr<std::vector<XYZVectorF>>              ElidRaw_refitMomentum_;   // Decoded QELID(3..5)
 
     // --- HAID: PA.HAID hadron-ID + RICH measurements.
     // Direct PHDST-level decode of the variable-length HAID bank, mirroring

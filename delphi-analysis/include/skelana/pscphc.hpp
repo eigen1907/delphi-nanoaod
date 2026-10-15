@@ -13,13 +13,15 @@ namespace skelana
      * Fields (SKELANA v1.05 A.1.8):
      *     KPHOC( 1,I) - index of first decay product
      *     KPHOC( 2,I) - index of second decay product
-     *     KPHOC( 3,I) - index of simulated photon (if any)
+     *     KPHOC( 3,I) - legacy photon lookup; current PSHPHC searches Reco LVECP,
+     *                    so this is not a reliable Sim index
      *     KPHOC( 4,I) - PXPHOT code
      *                    (photon converted in front of TPC, mass code 21)
-     *                   -21 conversion from 2 TPC tracks, type I pair
-     *                   -22 conversion from 2 TPC tracks, type II pair
-     *                   -23 conversion from 2 TPC tracks, type III pair
-     *                   -24 conversion from 1 TPC track,  type I pair
+     *                    21 conversion from 2 TPC tracks, type I pair
+     *                    22 conversion from 2 TPC tracks, type II pair
+     *                    23 conversion from 2 TPC tracks, type III pair
+     *                    24 conversion from 1 TPC track,  type I pair
+     *                    Legacy banks may use negative codes.
      *     QPHOC( 5,I) - Px of the photon
      *     QPHOC( 6,I) - Py of the photon
      *     QPHOC( 7,I) - Pz of the photon

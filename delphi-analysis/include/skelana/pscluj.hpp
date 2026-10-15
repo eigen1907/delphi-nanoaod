@@ -19,9 +19,9 @@ namespace skelana
 *     PP(I,4) - E , energy, in GeV
 *     PP(I,5) - m , mass, in GeV/c**2
 *
-*     VP(I,1) - x position of production vertex, in mm
-*     VP(I,2) - y position of production vertex, in mm
-*     VP(I,3) - z position of production vertex, in mm
+*     VP(I,1) - x position of production vertex (DST unpackers use cm)
+*     VP(I,2) - y position of production vertex (DST unpackers use cm)
+*     VP(I,3) - z position of production vertex (DST unpackers use cm)
 *     VP(I,4) - time of production
 *     VP(I,5) - proper lifetime of the particle, or 0.
 *

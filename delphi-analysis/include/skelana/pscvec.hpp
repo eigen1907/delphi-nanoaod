@@ -42,6 +42,12 @@ namespace skelana
             float vecp[3 * MTRACK][10];
         } pucppp_;
 
+        // First array in VECSUB's PUCLLL common: PA/Sim bank links.
+        extern "C" struct
+        {
+            int lvecp[3 * MTRACK];
+        } puclll_;
+
         extern "C" struct
         {
             int nvecp;
@@ -62,10 +68,9 @@ namespace skelana
         inline int &NVECMC = pscvec_.nvecmc;
         inline int &NJET = pscvec_.njet;
         inline int &LVLOCK(int i) { return pscvec_.lvlock[i - 1]; }
+        inline int &LVECP(int i) { return puclll_.lvecp[i - 1]; }
         inline int &INVEC(int i) { return pscvec_.invecp[i - 1]; }
     
 } // namespace skelana
 
 #endif // SKELANA_PSCVEC_HPP
-    
-    

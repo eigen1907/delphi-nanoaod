@@ -38,7 +38,7 @@ namespace skelana
   /* +KEEP,PSCSTC
    *                            ( PA extra-module SSTC (33) )
    */
-  inline const int LENSTC = 6;
+  inline const int LENSTC = 9;
   extern "C" struct
   {
     int nstic;

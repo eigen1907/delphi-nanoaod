@@ -10,6 +10,7 @@
 #include "skelana/pschad.hpp"
 #include "skelana/pscgrc.hpp"
 #include "skelana/psclrc.hpp"
+#include "skelana/psceld.hpp"
 
 namespace sk = skelana;
 
@@ -55,7 +56,11 @@ static void MakeField(std::unique_ptr<RNTupleModel> &model,
                       const std::string &name, const std::string &description,
                       std::shared_ptr<T> &ptr)
 {
+#if ROOT_VERSION_CODE >= ROOT_VERSION(6, 36, 0)
+    ptr = model->MakeField<T>(name, description);
+#else
     ptr = model->MakeField<T>({name, description});
+#endif
 }
 
 // -----------------------------------------------------------------------------
@@ -282,8 +287,8 @@ void RawNanoAODWriter::defineEmShower(std::unique_ptr<RNTupleModel> &model)
     MakeField(model, "EmShower_detector",       "IDET: 9 = HPC (barrel), 26 = EMF/FEMC (endcap merged)",      EmShower_detector_);
     MakeField(model, "EmShower_energy",         "Q(LSHOWR+1) shower energy (GeV)",                            EmShower_energy_);
     MakeField(model, "EmShower_position",       "Q(LSHOWR+2..4) shower impact position (cm)",                 EmShower_position_);
-    MakeField(model, "EmShower_nLayers",        "Q(LSHOWR+5) number of HPC layers hit",                       EmShower_nLayers_);
-    MakeField(model, "EmShower_layerPattern",   "Q(LSHOWR+6) 10-bit HPC layer hit pattern",                   EmShower_layerPattern_);
+    MakeField(model, "EmShower_nLayers",        "Q(LSHOWR+5) number of HPC layers hit; -1 when absent (FEMC)", EmShower_nLayers_);
+    MakeField(model, "EmShower_layerPattern",   "Q(LSHOWR+6) HPC layer pattern; -1 when absent (FEMC)",        EmShower_layerPattern_);
     MakeField(model, "EmShower_nLayerEnergies", "Number of EmLayer_* rows emitted for this shower",           EmShower_nLayerEnergies_);
 
     MakeField(model, "nEmLayer",                "Total EM-layer rows across all showers", nEmLayer_);
@@ -312,9 +317,7 @@ void RawNanoAODWriter::fillEmShowers()
     EmLayer_layer_->clear();
     EmLayer_energy_->clear();
 
-    // NHPLAY = number of HPC layers (9 in DELPHI, verified via pschpc.hpp
-    // LENHPC=8 having layer hit pattern at index 6 etc.). Use 10 as a
-    // generous loop bound to cover historical 9- and 10-layer variants.
+    // The DST HPC layer pattern has NHPLAY=10 slots.
     const int kMaxLayersToScan = 10;
 
     // Walk: LDTOP -> PV bank(s) -> PA bank(s) -> EMNC.
@@ -341,8 +344,9 @@ void RawNanoAODWriter::fillEmShowers()
                 float px     = ph::Q(lshowr + 2);
                 float py     = ph::Q(lshowr + 3);
                 float pz     = ph::Q(lshowr + 4);
-                int   nlay   = static_cast<int>(std::lround(ph::Q(lshowr + 5)));
-                int   patt   = static_cast<int>(std::lround(ph::Q(lshowr + 6)));
+                // FEMC records have only four words: no layer metadata.
+                int   nlay   = idet == 9 ? static_cast<int>(std::lround(ph::Q(lshowr + 5))) : -1;
+                int   patt   = idet == 9 ? static_cast<int>(std::lround(ph::Q(lshowr + 6))) : -1;
 
                 EmShower_paIdx_->push_back(static_cast<std::int16_t>(paIdx));
                 EmShower_detector_->push_back(static_cast<std::int8_t>(idet));
@@ -494,7 +498,7 @@ void RawNanoAODWriter::defineStic(std::unique_ptr<RNTupleModel> &model)
     MakeField(model, "nStic",                   "Number of tracks with a STIC shower (PA.SSTC)", nStic_);
     MakeField(model, "Stic_paIdx",              "PA-track index",                                Stic_paIdx_);
     MakeField(model, "Stic_energyFromMain",     "Q(LMAIN+6) energy reported by the MAIN block",  Stic_energyFromMain_);
-    MakeField(model, "Stic_directionFromMain",  "Q(LMAIN+3..5) direction reported by MAIN",      Stic_directionFromMain_);
+    MakeField(model, "Stic_directionFromMain",  "Q(LMAIN+3..5): momentum (px,py,pz) in GeV, not a unit vector", Stic_directionFromMain_);
     MakeField(model, "Stic_numHitTowers",       "Q(LSSTC+2) encoded tower-hit count (/10)",      Stic_numHitTowers_);
 }
 
@@ -534,9 +538,8 @@ void RawNanoAODWriter::fillStic()
 
 // -----------------------------------------------------------------------------
 // Per-track Muon + Electron raw ID (PA.MUID + PA.ELID).
-// Mirrors PSCMUD / PSCELD but emitted by our PHDST reader directly, without
-// going through SKELANA. Useful when the SKELANA-based pipeline is not in
-// play but you still want the standard per-track lepton-ID words.
+// Electron tags come from the PA identification word; electron momentum
+// comes from the bank already decoded by PSBEG. ELID headers are not tags.
 // -----------------------------------------------------------------------------
 void RawNanoAODWriter::defineMuidEl(std::unique_ptr<RNTupleModel> &model)
 {
@@ -548,9 +551,9 @@ void RawNanoAODWriter::defineMuidEl(std::unique_ptr<RNTupleModel> &model)
 
     MakeField(model, "nElidRaw",            "Number of tracks with PA.ELID (electron-ID)", nElidRaw_);
     MakeField(model, "ElidRaw_paIdx",       "PA-track index",                              ElidRaw_paIdx_);
-    MakeField(model, "ElidRaw_tag",         "Q(LELID+1) NINT: ELECID tag (0..5)",          ElidRaw_tag_);
-    MakeField(model, "ElidRaw_gammaConvTag","Q(LELID+2) NINT: gamma-conversion tag",       ElidRaw_gammaConvTag_);
-    MakeField(model, "ElidRaw_refitMomentum","Q(LELID+3..5): electron refit 3-momentum at vertex", ElidRaw_refitMomentum_);
+    MakeField(model, "ElidRaw_tag",         "PA identification word bits 7..9: electron tag", ElidRaw_tag_);
+    MakeField(model, "ElidRaw_gammaConvTag","PA identification word bits 10..12: conversion/veto tag", ElidRaw_gammaConvTag_);
+    MakeField(model, "ElidRaw_refitMomentum","Decoded QELID(3..5): best electron momentum in GeV; zero when unavailable", ElidRaw_refitMomentum_);
 }
 
 void RawNanoAODWriter::fillMuidEl()
@@ -586,12 +589,19 @@ void RawNanoAODWriter::fillMuidEl()
             if (lelid > 0)
             {
                 ElidRaw_paIdx_->push_back(static_cast<std::int16_t>(paIdx));
-                ElidRaw_tag_->push_back(
-                    static_cast<std::int32_t>(std::lround(ph::Q(lelid + 1))));
-                ElidRaw_gammaConvTag_->push_back(
-                    static_cast<std::int32_t>(std::lround(ph::Q(lelid + 2))));
-                ElidRaw_refitMomentum_->push_back(XYZVectorF(
-                    ph::Q(lelid + 3), ph::Q(lelid + 4), ph::Q(lelid + 5)));
+                const auto id = static_cast<std::uint32_t>(ph::IQ(lpa + 3));
+                ElidRaw_tag_->push_back((id >> 6) & 7);
+                ElidRaw_gammaConvTag_->push_back((id >> 9) & 7);
+                // PSBEG already decoded MAIN/ELTR into the electron bank.
+                const auto end = sk::puclll_.lvecp + sk::NVECP;
+                const auto part = std::find(sk::puclll_.lvecp + sk::LVPART - 1, end, lpa);
+                XYZVectorF momentum(0, 0, 0);
+                if (part != end)
+                {
+                    const int i = static_cast<int>(part - sk::puclll_.lvecp) + 1;
+                    momentum = XYZVectorF(sk::QELID(3, i), sk::QELID(4, i), sk::QELID(5, i));
+                }
+                ElidRaw_refitMomentum_->push_back(momentum);
             }
         }
     }
@@ -1264,8 +1274,7 @@ void RawNanoAODWriter::defineGenPart(std::unique_ptr<RNTupleModel> &model)
     MakeField(model, "GenPart_fourMomentum",   "PP(i,1..4): (px, py, pz, E) in GeV",                    GenPart_fourMomentum_);
     MakeField(model, "GenPart_mass",           "PP(i,5): generator mass in GeV",                        GenPart_mass_);
     MakeField(model, "GenPart_vertex",
-        "VP(i,1..3): production vertex (mm). Units differ from the reco Vtx_position "
-        "(cm) and TracRaw impact params (cm) -- LUJETS uses mm by convention.",
+        "VP(i,1..3): production vertex in cm, copied from PV/PVS by the DST unpacker.",
         GenPart_vertex_);
     MakeField(model, "GenPart_productionTime", "VP(i,4): time of production",       GenPart_productionTime_);
     MakeField(model, "GenPart_properLifetime", "VP(i,5): proper lifetime",          GenPart_properLifetime_);

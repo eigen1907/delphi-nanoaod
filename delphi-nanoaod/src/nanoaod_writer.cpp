@@ -29,7 +29,11 @@ float &OBL = psjval_.obl;
 template <typename T>
 void MakeField(std::unique_ptr<RNTupleModel> &model, const std::string &name, const std::string &description, std::shared_ptr<T> &ptr)
 {
+#if ROOT_VERSION_CODE >= ROOT_VERSION(6, 36, 0)
+    ptr = model->MakeField<T>(name, description);
+#else
     ptr = model->MakeField<T>({name, description});
+#endif
 }
 
 // Fill a vector with n elements using a function f
@@ -316,7 +320,7 @@ void NanoAODWriter::definePart(std::unique_ptr<RNTupleModel> &model)
     MakeField(model, "nPart", "Number of particles", nPart_);
     MakeField(model, "Part_fourMomentum", "Particle 4-momentum", Part_fourMomentum_);
     MakeField(model, "Part_charge", "Particle charge", Part_charge_);
-    MakeField(model, "Part_pdgId", "Particle PDG ID", Part_pdgId_);
+    MakeField(model, "Part_pdgId", "DELPHI mass code, not PDG ID (gamma=21, e-=2, e+=-2)", Part_pdgId_);
     MakeField(model, "Part_massId", "Particle mass ID", Part_massId_);
     MakeField(model, "Part_jetIdx", "Jet index", Part_jetIdx_);
     MakeField(model, "Part_hemisphereIdx", "Hemisphere index", Part_hemisphereIdx_);
@@ -344,7 +348,7 @@ void NanoAODWriter::definePart(std::unique_ptr<RNTupleModel> &model)
     MakeField(model, "Part_sticShowerPhi", "QSTIC(3): STIC shower phi", Part_sticShowerPhi_);
     MakeField(model, "Part_sticNumTowers", "KSTIC(4): number of STIC towers in the shower", Part_sticNumTowers_);
     MakeField(model, "Part_sticChargedTag", "KSTIC(5): charged tag from the STIC veto", Part_sticChargedTag_);
-    MakeField(model, "Part_sticSiliconVertexPos", "KSTIC(6): STIC silicon strip vertex position", Part_sticSiliconVertexPos_);
+    MakeField(model, "Part_sticSiliconVertexPos", "KSTIC(9): STIC silicon strip vertex position", Part_sticSiliconVertexPos_);
 
     if (mc_ && sk::IFLSIM > 0)
     {
@@ -418,7 +422,7 @@ void NanoAODWriter::fillPart()
     fillVector(Part_sticChargedTag_, sk::LVPART, sk::NVECP, [](int i)
                { return sk::KSTIC(5, i); });
     fillVector(Part_sticSiliconVertexPos_, sk::LVPART, sk::NVECP, [](int i)
-               { return sk::KSTIC(6, i); });
+               { return sk::KSTIC(9, i); });
 
     if (mc_ && sk::IFLSIM > 0)
     {
@@ -458,8 +462,8 @@ void NanoAODWriter::definePhoton(std::unique_ptr<RNTupleModel> &model)
     MakeField(model, "Photon_hpcParticleCode", "KHPC(4): HPC particle identification code", Photon_hpcParticleCode_);
     MakeField(model, "Photon_sticShowerEnergy", "QSTIC(1): STIC shower energy", Photon_sticShowerEnergy_);
     MakeField(model, "Photon_sticNumTowers", "KSTIC(4): number of STIC towers hit", Photon_sticNumTowers_);
-    MakeField(model, "Photon_sticChargedTag", "KSTIC(5): STIC charged-track veto. Code values (SKELANA v1.05 A.3.3): -2 = tight photon, -1 = loose photon, 0 = no information, +1 = electron", Photon_sticChargedTag_);
-    MakeField(model, "Photon_emEnergy", "QEMF(8): total EM energy (FEMC/HPC merged)", Photon_emEnergy_);
+    MakeField(model, "Photon_sticChargedTag", "KSTIC(5): charged tag. STIC large veto: 0 = no information, 1 = hard photon, 2 = soft photon, 3 = electron. Legacy SSTC: -2 = tight photon, -1 = loose photon, 0 = no information, 1 = electron", Photon_sticChargedTag_);
+    MakeField(model, "Photon_emEnergy", "QEMF(8): FEMC energy; HPC energy is stored separately", Photon_emEnergy_);
     MakeField(model, "Photon_hadEnergy", "QHAC(8): HAC leakage, for EM/HAD cut", Photon_hadEnergy_);
 
     // Tier 2: per-track photon- and pi0-ID in HPC (only populated where SKELANA filled
@@ -563,8 +567,8 @@ void NanoAODWriter::definePhotonConv(std::unique_ptr<RNTupleModel> &model)
     MakeField(model, "nPhotonConv",                  "Number of γ→e+e- conversions (PSCPHC)", nPhotonConv_);
     MakeField(model, "PhotonConv_firstDaughterIdx",  "KPHOC(1)-1: index of first decay product", PhotonConv_firstDaughterIdx_);
     MakeField(model, "PhotonConv_secondDaughterIdx", "KPHOC(2)-1: index of second decay product", PhotonConv_secondDaughterIdx_);
-    MakeField(model, "PhotonConv_simPhotonIdx",      "KPHOC(3)-1: index of simulated photon (MC only)", PhotonConv_simPhotonIdx_);
-    MakeField(model, "PhotonConv_pairType",          "KPHOC(4): -21/-22/-23 = 2-TPC I/II/III, -24 = 1-TPC I", PhotonConv_pairType_);
+    MakeField(model, "PhotonConv_simPhotonIdx",      "Direct Sim gamma index from the reciprocal Reco conversion parent Part (-1 if unavailable)", PhotonConv_simPhotonIdx_);
+    MakeField(model, "PhotonConv_pairType",          "KPHOC(4): current banks use 21/22/23 = 2-TPC I/II/III, 24 = 1-TPC I; legacy banks may use negative codes", PhotonConv_pairType_);
     MakeField(model, "PhotonConv_fourMomentum",      "QPHOC(5..8): photon 4-momentum at conversion", PhotonConv_fourMomentum_);
     MakeField(model, "PhotonConv_trackLength",       "QPHOC(9): photon track length beam spot → conversion", PhotonConv_trackLength_);
     MakeField(model, "PhotonConv_vertex",            "QPHOC(10..12): conversion vertex (cm)", PhotonConv_vertex_);
@@ -583,9 +587,32 @@ void NanoAODWriter::fillPhotonConv()
     const int n = sk::NPHOC;
     for (int i = 1; i <= n; ++i)
     {
-        PhotonConv_firstDaughterIdx_->push_back(static_cast<int16_t>(sk::KPHOC(1, i) - 1));
-        PhotonConv_secondDaughterIdx_->push_back(static_cast<int16_t>(sk::KPHOC(2, i) - 1));
-        PhotonConv_simPhotonIdx_->push_back(static_cast<int16_t>(sk::KPHOC(3, i) - 1));
+        const int first = sk::KPHOC(1, i);
+        const int second = sk::KPHOC(2, i);
+        int simIdx = -1;
+        // Use the saved conversion vertex and its reciprocal parent Part link.
+        // Current PSHPHC searches Reco bank indices when filling KPHOC(3).
+        if (mc_ && sk::IFLSIM > 0 && first >= sk::LVPART && first <= sk::NVECP &&
+            (second == 0 || (second >= sk::LVPART && second <= sk::NVECP)))
+        {
+            const int vertex = sk::IPAPV(1, first);
+            if (vertex > 0 && vertex <= sk::NVTX &&
+                (second == 0 || sk::IPAPV(1, second) == vertex))
+            {
+                const int parent = sk::KVTX(2, vertex);
+                if (parent >= sk::LVPART && parent <= sk::NVECP &&
+                    sk::IPAPV(2, parent) == vertex && sk::VECP(7, parent) == 0.0f &&
+                    int(sk::VECP(8, parent)) == 21)
+                {
+                    const int sim = sk::IPAST(parent);
+                    if (sim > 0 && sim <= sk::NVECMC && int(sk::VECP(8, sk::MTRACK + sim)) == 21)
+                        simIdx = sim - 1;
+                }
+            }
+        }
+        PhotonConv_firstDaughterIdx_->push_back(static_cast<int16_t>(first - 1));
+        PhotonConv_secondDaughterIdx_->push_back(static_cast<int16_t>(second - 1));
+        PhotonConv_simPhotonIdx_->push_back(static_cast<int16_t>(simIdx));
         PhotonConv_pairType_->push_back(static_cast<int8_t>(sk::KPHOC(4, i)));
         PhotonConv_fourMomentum_->push_back(XYZTVectorF(
             sk::QPHOC(5, i), sk::QPHOC(6, i), sk::QPHOC(7, i), sk::QPHOC(8, i)));
@@ -882,7 +909,7 @@ void NanoAODWriter::defineSimPart(std::unique_ptr<RNTupleModel> &model)
     MakeField(model, "nSimPart", "Number of simulated particles", nSimPart_);
     MakeField(model, "SimPart_fourMomentum", "Simulated particle 4-momentum", SimPart_fourMomentum_);
     MakeField(model, "SimPart_charge", "Simulated particle charge", SimPart_charge_);
-    MakeField(model, "SimPart_pdgId", "Simulated particle PDG ID", SimPart_pdgId_);
+    MakeField(model, "SimPart_pdgId", "DELPHI mass code, not PDG ID (gamma=21, e-=2, e+=-2)", SimPart_pdgId_);
     MakeField(model, "SimPart_partIdx", "Simulated particle index", SimPart_partIdx_);
     MakeField(model, "SimPart_genIdx", "Simulated particle generation index", SimPart_genIdx_);
     MakeField(model, "SimPart_originVtxIdx", "Simulated particle origin vertex index", SimPart_originVtxIdx_);
@@ -901,7 +928,7 @@ void NanoAODWriter::fillSimPart()
     fillVector(SimPart_partIdx_, sk::LVPART, sk::NVECMC, [](int i)
     { return sk::ISTPA(i) - 1; });
     fillVector(SimPart_genIdx_, sk::LVPART, sk::NVECMC, [](int i)
-    { return sk::ISTSH(i) - 1; });
+    { return sk::ISTLU(i) - 1; });
     fillVector(SimPart_originVtxIdx_, sk::LVPART, sk::NVECMC, [](int i)
     { return sk::ISTVX(1, i) - 1; });
     fillVector(SimPart_decayVtxIdx_, sk::LVPART, sk::NVECMC, [](int i)
@@ -917,7 +944,7 @@ void NanoAODWriter::defineGenPart(std::unique_ptr<RNTupleModel> &model)
     MakeField(model, "GenPart_firstChildIdx", "Generated particle first child index", GenPart_firstChildIdx_);
     MakeField(model, "GenPart_lastChildIdx", "Generated particle last child index", GenPart_lastChildIdx_);
     MakeField(model, "GenPart_vector", "Generated particle 4-momentum", GenPart_fourMomentum_);
-    MakeField(model, "GenPart_vertex", "Generated particle 4-position", GenPart_fourPosition_);
+    MakeField(model, "GenPart_vertex", "Generated position from DST (x,y,z in cm; time is not saved)", GenPart_fourPosition_);
     MakeField(model, "GenPart_tau", "Generated particle lifetime", GenPart_tau_);
     MakeField(model, "GenPart_simIdx", "Generated particle simulation index", GenPart_simIdx_);
     MakeField(model, "GenPart_mass", "Generated particle mass", GenPart_mass_);
@@ -943,7 +970,7 @@ void NanoAODWriter::fillGenPart()
     fillVector(GenPart_tau_, 1, sk::NP, [](int i)
                { return sk::VP(i, 5); });
     fillVector(GenPart_simIdx_, 1, sk::NP, [](int i)
-               { return sk::ISHST(i) - 1; });
+               { return sk::ILUST(i) - 1; });
 
     fillVector(GenPart_mass_, 1, sk::NP, [](int i)
     { return sk::PP(i, 5); });
@@ -970,9 +997,9 @@ void NanoAODWriter::fillSimVtx()
     fillVector(SimVtx_nOutgoing_, sk::NVTXMX + 1, sk::NVTXMC, [](int i)
     { return sk::KVTX(3, i); });
     fillVector(SimVtx_masscode_, sk::NVTXMX + 1, sk::NVTXMC, [](int i)
-    { return sk::KVTX(4, i); });
+    { return sk::KVTX(5, i); });
     fillVector(SimVtx_position_, sk::NVTXMX + 1, sk::NVTXMC, [](int i)
-    { return XYZPointF(sk::QVTX(1, i), sk::QVTX(2, i), sk::QVTX(3, i)); });
+    { return XYZPointF(sk::QVTX(6, i), sk::QVTX(7, i), sk::QVTX(8, i)); });
 }
 
 void NanoAODWriter::defineTrac(std::unique_ptr<RNTupleModel> &model)

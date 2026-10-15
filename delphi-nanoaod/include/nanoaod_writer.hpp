@@ -18,6 +18,7 @@
 #include <ROOT/RNTuple.hxx>
 #include <ROOT/RNTupleModel.hxx>
 #include <ROOT/RNTupleWriter.hxx>
+#include <RVersion.h>
 #include <Math/Vector4D.h>
 #include <Math/Vector3D.h>
 #include <Math/SMatrixFfwd.h>
@@ -35,8 +36,13 @@
 #include "DataProcessing/include/thrustTools.h"
 #include "DataProcessing/include/sphericityTools.h"
 
+#if ROOT_VERSION_CODE >= ROOT_VERSION(6, 36, 0)
+using RNTupleWriter = ROOT::RNTupleWriter;
+using RNTupleModel = ROOT::RNTupleModel;
+#else
 using RNTupleWriter = ROOT::Experimental::RNTupleWriter;
 using RNTupleModel = ROOT::Experimental::RNTupleModel;
+#endif
 
 namespace sk = skelana;
 
@@ -216,7 +222,7 @@ private:
     std::shared_ptr<std::vector<float>>             Photon_sticShowerEnergy_;// QSTIC(1)
     std::shared_ptr<std::vector<int>>               Photon_sticNumTowers_;   // KSTIC(4)
     std::shared_ptr<std::vector<int>>               Photon_sticChargedTag_;  // KSTIC(5) charged-track veto
-    std::shared_ptr<std::vector<float>>             Photon_emEnergy_;        // QEMF(8) total EM (FEMC merged)
+    std::shared_ptr<std::vector<float>>             Photon_emEnergy_;        // QEMF(8) FEMC energy; HPC is stored separately
     std::shared_ptr<std::vector<float>>             Photon_hadEnergy_;       // QHAC(8) leakage for EM/HAD
 
     // Tier 2 (photon ID in HPC, per-track from PSCPHO / PSCPI0)
@@ -236,8 +242,8 @@ private:
     std::shared_ptr<int16_t>                        nPhotonConv_;
     std::shared_ptr<std::vector<int16_t>>           PhotonConv_firstDaughterIdx_;       // KPHOC(1)-1
     std::shared_ptr<std::vector<int16_t>>           PhotonConv_secondDaughterIdx_;      // KPHOC(2)-1
-    std::shared_ptr<std::vector<int16_t>>           PhotonConv_simPhotonIdx_;           // KPHOC(3)-1
-    std::shared_ptr<std::vector<int8_t>>            PhotonConv_pairType_;               // KPHOC(4): -21/-22/-23=2-TPC I/II/III, -24=1-TPC
+    std::shared_ptr<std::vector<int16_t>>           PhotonConv_simPhotonIdx_;           // Reciprocal conversion parent Sim index; -1 if unavailable
+    std::shared_ptr<std::vector<int8_t>>            PhotonConv_pairType_;               // KPHOC(4): 21-23=2-TPC I/II/III, 24=1-TPC; legacy negative codes
     std::shared_ptr<std::vector<XYZTVectorF>>       PhotonConv_fourMomentum_;           // QPHOC(5..8)
     std::shared_ptr<std::vector<float>>             PhotonConv_trackLength_;            // QPHOC(9)
     std::shared_ptr<std::vector<XYZPointF>>         PhotonConv_vertex_;                 // QPHOC(10..12)
